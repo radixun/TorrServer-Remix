@@ -147,3 +147,8 @@ html[data-tv='true'] .cinema-grid { grid-template-columns: repeat(auto-fill, min
 .cinema-file-dialog .MuiDialogActions-root { padding: 18px 20px; border-top: 1px solid #ffffff16; flex-wrap: wrap; justify-content: space-between; }
 .cinema-file-dialog .MuiDialogActions-root .MuiButton-root { min-height: 44px; color: #d7dce5; }
 .cinema-file-dialog .MuiDialogActions-root .MuiButton-root:hover { background: #ffffff0a; }
+
+/* Keep playback controls aligned when watched status changes. */
+.cinema-button.cinema-viewed { width: 190px; flex-shrink: 0; white-space: nowrap; padding: 12px; }
+.cinema-button.cinema-viewed.is-viewed { color: #bde5cc; border-color: #5c8a70; background: #193126; }
+.cinema-button.cinema-viewed.is-viewed:hover { background: #234432; border-color: #7ba88e; }

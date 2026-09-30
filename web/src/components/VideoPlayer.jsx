@@ -31,6 +31,7 @@ export default function VideoPlayer({
   buttonClassName = 'cinema-button',
   mediaId,
   onClosed,
+  onPlaybackStarted,
 }) {
   const c = useCinemaText()
   const video = useRef(null)
@@ -49,6 +50,7 @@ export default function VideoPlayer({
   const [caption, setCaption] = useState('')
   const controlsTimer = useRef(null)
   const lastSave = useRef(0)
+  const playbackStarted = useRef(false)
   const audioButton = useRef(null)
   const subtitleButton = useRef(null)
   const unbindTracks = useRef(null)
@@ -193,6 +195,7 @@ export default function VideoPlayer({
       window.AndroidTorrServer.play(new URL(videoSrc, window.location.href).toString(), title || '')
       return
     }
+    playbackStarted.current = false
     setWaiting(true)
     setNeedsPlay(false)
     setForceAdapt(false)
@@ -270,6 +273,10 @@ export default function VideoPlayer({
               setNeedsPlay(false)
               setPlaying(true)
               setError('')
+              if (!playbackStarted.current) {
+                playbackStarted.current = true
+                onPlaybackStarted?.()
+              }
             }}
             onPlay={() => setPlaying(true)}
             onPause={() => {

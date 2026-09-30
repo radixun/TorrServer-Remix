@@ -24,3 +24,11 @@ On 2026-09-30 the source distribution was organized for public publication:
 The public branch starts from upstream MatriX.141, followed by one fork snapshot
 commit. Public upstream history establishes provenance; previous private
 development commits and operational state are not distributed. No media library or movie files are included.
+
+The cinema title page restores per-file watched indicators from the existing
+server `/viewed` history, including records created before the redesign or by
+other clients. Browser playback records the file when video starts playing,
+including playback from offline storage. Each movie/episode has a manual toggle
+to set or remove its mark. As in upstream, a watched mark means the file was
+opened for playback; it does not prove completion and is separate from the
+browser's saved resume position.
