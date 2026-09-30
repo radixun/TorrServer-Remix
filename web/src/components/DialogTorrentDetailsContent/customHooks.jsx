@@ -1,37 +1,68 @@
-import { useEffect, useRef, useState } from 'react'
-import { cacheHost, settingsHost } from 'utils/Hosts'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { cacheHost, offlineStatusHost, settingsHost } from 'utils/Hosts'
 import axios from 'axios'
 
 export const useUpdateCache = hash => {
   const [cache, setCache] = useState({})
-  const componentIsMounted = useRef(true)
-  const timerID = useRef(null)
+  const [status, setStatus] = useState('idle')
+  const [error, setError] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
+  const hasCache = useRef(false)
 
-  useEffect(
-    () => () => {
-      // this function is required to notify "updateCache" when NOT to make state update
-      componentIsMounted.current = false
-    },
-    [],
-  )
+  const retry = useCallback(() => setRetryCount(value => value + 1), [])
 
   useEffect(() => {
-    if (hash) {
-      timerID.current = setInterval(() => {
-        const updateCache = newCache => componentIsMounted.current && setCache(newCache)
+    let cancelled = false
+    let timerID
+    let controller
 
-        axios
-          .post(cacheHost(), { action: 'get', hash })
-          .then(({ data }) => updateCache(data))
-          // empty cache if error
-          .catch(() => updateCache({}))
-      }, 100)
-    } else clearInterval(timerID.current)
+    hasCache.current = false
+    setCache({})
+    setError('')
 
-    return () => clearInterval(timerID.current)
-  }, [hash])
+    if (!hash) {
+      setStatus('idle')
+      return undefined
+    }
 
-  return cache
+    setStatus('loading')
+
+    const update = async () => {
+      controller = new AbortController()
+
+      try {
+        const { data } = await axios.post(
+          cacheHost(),
+          { action: 'get', hash },
+          { signal: controller.signal, timeout: 5000 },
+        )
+        if (cancelled) return
+
+        hasCache.current = true
+        setCache(data || {})
+        setError('')
+        setStatus('ready')
+      } catch (requestError) {
+        if (cancelled || requestError?.code === 'ERR_CANCELED') return
+
+        setError(requestError?.response?.data?.error || requestError.message)
+        setStatus(hasCache.current ? 'ready' : 'error')
+      } finally {
+        // Schedule only after the current request settles so slow requests never overlap.
+        if (!cancelled) timerID = setTimeout(update, 900)
+      }
+    }
+
+    update()
+
+    return () => {
+      cancelled = true
+      clearTimeout(timerID)
+      controller?.abort()
+    }
+  }, [hash, retryCount])
+
+  return { cache, error, retry, status }
 }
 
 export const useCreateCacheMap = cache => {
@@ -45,7 +76,11 @@ export const useCreateCacheMap = cache => {
     for (let i = 0; i < PiecesCount; i++) {
       const { Size, Length, Priority } = Pieces[i] || {}
 
-      const newPiece = { id: i, percentage: (Size / Length) * 100 || 0, priority: Priority || 0 }
+      const newPiece = {
+        id: i,
+        percentage: (Size / Length) * 100 || 0,
+        priority: Priority || 0,
+      }
 
       Readers.forEach(r => {
         if (i === r.Reader) newPiece.isReader = true
@@ -67,4 +102,40 @@ export const useGetSettings = cache => {
   }, [cache])
 
   return settings
+}
+
+export const useOfflineStatus = hash => {
+  const [status, setStatus] = useState({
+    state: 'not_downloaded',
+    enabled: false,
+    available: false,
+  })
+
+  useEffect(() => {
+    let mounted = true
+    const update = () => {
+      if (!hash) return
+      axios
+        .get(offlineStatusHost(hash))
+        .then(({ data }) => mounted && setStatus(data))
+        .catch(error => {
+          if (!mounted) return
+          setStatus({
+            state: 'unavailable',
+            enabled: true,
+            available: false,
+            error: error?.response?.data?.error || error.message,
+          })
+        })
+    }
+
+    update()
+    const timerID = setInterval(update, 1000)
+    return () => {
+      mounted = false
+      clearInterval(timerID)
+    }
+  }, [hash])
+
+  return [status, setStatus]
 }

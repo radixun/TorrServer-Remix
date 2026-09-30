@@ -1,7 +1,7 @@
 import axios from 'axios'
 import parseTorrent from 'parse-torrent'
 import ptt from 'parse-torrent-title'
-import { tmdbSettingsHost } from 'utils/Hosts'
+import { postersSearchHost, tmdbSettingsHost } from 'utils/Hosts'
 
 // Cache for TMDB settings to avoid repeated API calls
 let tmdbSettingsCache = null
@@ -31,7 +31,14 @@ const getTMDBSettings = async () => {
   }
 }
 
-export const getMoviePosters = async (movieName, language = 'en') => {
+const withProtocol = value => {
+  const normalizedValue = `${value || ''}`.trim()
+  if (!normalizedValue) return ''
+  if (/^https?:\/\//i.test(normalizedValue)) return normalizedValue
+  return `https://${normalizedValue}`
+}
+
+const getMoviePostersDirect = async (movieName, language = 'en') => {
   const settings = await getTMDBSettings()
 
   // If no API key is configured, return null
@@ -40,7 +47,7 @@ export const getMoviePosters = async (movieName, language = 'en') => {
   }
 
   // Build API URL - automatically append /3/search/multi
-  let apiURL = settings.APIURL.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  let apiURL = withProtocol(settings.APIURL).replace(/\/$/, '')
 
   // If URL doesn't already contain the full path, add /3/search/multi
   if (!apiURL.includes('/3/search/multi')) {
@@ -49,14 +56,10 @@ export const getMoviePosters = async (movieName, language = 'en') => {
     apiURL = `${apiURL}/3/search/multi`
   }
 
-  const url = `${window.location.protocol}//${apiURL}`
+  const url = apiURL
 
   // Build image URL - strip protocol and trailing slash
-  const imgHost = `${window.location.protocol}//${
-    language === 'ru'
-      ? settings.ImageURLRu.replace(/^https?:\/\//, '').replace(/\/$/, '')
-      : settings.ImageURL.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  }`
+  const imgHost = withProtocol(language === 'ru' ? settings.ImageURLRu : settings.ImageURL).replace(/\/$/, '')
 
   return axios
     .get(url, {
@@ -71,6 +74,15 @@ export const getMoviePosters = async (movieName, language = 'en') => {
       results.filter(el => el.poster_path).map(el => `${imgHost}/t/p/w300${el.poster_path}`),
     )
     .catch(() => null)
+}
+
+export const getMoviePosters = async (movieName, language = 'en') => {
+  if (!movieName) return null
+
+  return axios
+    .post(postersSearchHost(), { title: movieName, language })
+    .then(({ data }) => data?.posters || null)
+    .catch(() => getMoviePostersDirect(movieName, language))
 }
 
 export const checkImageURL = async url => {

@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
-	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -25,23 +27,54 @@ import (
 //	@Success		200	{array}	models.TorrentDetails	"Torznab torrent search result(s)"
 //	@Router			/torznab/search [get]
 func torznabSearch(c *gin.Context) {
-	if !sets.BTsets.EnableTorznabSearch {
-		c.JSON(http.StatusBadRequest, []string{})
+	if sets.BTsets == nil || !sets.BTsets.EnableTorznabSearch {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Torznab search is disabled"})
 		return
 	}
-	query := c.Query("query")
-	indexStr := c.DefaultQuery("index", "-1")
-	index := -1
-	if i, err := strconv.Atoi(indexStr); err == nil {
-		index = i
+	query := torznabSearchQuery(c)
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "search query is required"})
+		return
 	}
 
-	query, _ = url.QueryUnescape(query)
-	list := torznab.Search(query, index)
+	indexStr := c.DefaultQuery("index", "-1")
+	index, err := strconv.Atoi(indexStr)
+	if err != nil || index < -1 || index >= len(sets.BTsets.TorznabUrls) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Torznab index"})
+		return
+	}
+
+	list, err := torznab.SearchContext(c.Request.Context(), query, index)
+	if err != nil {
+		if errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
+		c.JSON(torznabErrorStatus(err), gin.H{"error": err.Error()})
+		return
+	}
 	if list == nil {
 		list = []*models.TorrentDetails{}
 	}
-	c.JSON(200, list)
+	c.JSON(http.StatusOK, list)
+}
+
+func torznabSearchQuery(c *gin.Context) string {
+	query := strings.TrimSpace(c.Query("query"))
+	if query == "" {
+		query = strings.TrimSpace(strings.TrimPrefix(c.Param("query"), "/"))
+	}
+	return query
+}
+
+func torznabErrorStatus(err error) int {
+	var searchErr *torznab.SearchError
+	if errors.As(err, &searchErr) && searchErr.Timeout() {
+		return http.StatusGatewayTimeout
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return http.StatusGatewayTimeout
+	}
+	return http.StatusBadGateway
 }
 
 type torznabTestReq struct {
@@ -56,7 +89,7 @@ func torznabTest(c *gin.Context) {
 		return
 	}
 
-	if err := torznab.Test(req.Host, req.Key); err != nil {
+	if err := torznab.TestContext(c.Request.Context(), req.Host, req.Key); err != nil {
 		c.JSON(200, gin.H{"success": false, "error": err.Error()})
 		return
 	}

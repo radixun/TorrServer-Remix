@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import axios from 'axios'
 import {
@@ -25,18 +25,21 @@ import useOnStandaloneAppOutsideClick from 'utils/useOnStandaloneAppOutsideClick
 import { StyledDialog, StyledHeader } from 'style/CustomMaterialUiStyles'
 import { parseSizeToBytes, formatSizeToClassicUnits } from 'utils/Utils'
 
-import { Content } from './style'
+import { Content, Footer } from './style'
 
-export default function SearchDialog({ handleClose }) {
+export default function SearchDialog({ handleClose, initialQuery = '', autoSearch = false }) {
   const { t } = useTranslation()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const [adding, setAdding] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [searchError, setSearchError] = useState('')
   const [trackers, setTrackers] = useState([])
+  const [settingsReady, setSettingsReady] = useState(false)
+  const [settingsAttempt, setSettingsAttempt] = useState(0)
   const [enableRutor, setEnableRutor] = useState(false)
   const [selectedTracker, setSelectedTracker] = useState(-1)
   const [sortField, setSortField] = useState('') // '', 'size', 'seeds', 'peers'
@@ -44,29 +47,50 @@ export default function SearchDialog({ handleClose }) {
   const fullScreen = useMediaQuery('@media (max-width:930px)')
   const isMobile = useMediaQuery('(max-width:600px)')
   const ref = useOnStandaloneAppOutsideClick(handleClose)
+  const searchRequestRef = useRef({ id: 0, controller: null })
 
   useEffect(() => {
+    const controller = new AbortController()
+    setSearchError('')
     axios
-      .post(settingsHost(), { action: 'get' })
+      .post(settingsHost(), { action: 'get' }, { signal: controller.signal, timeout: 8000 })
       .then(({ data }) => {
-        if (data) {
-          if (data.TorznabUrls) {
-            setTrackers(data.TorznabUrls)
-          }
-          setEnableRutor(!!data.EnableRutorSearch)
-        }
+        if (!data || controller.signal.aborted) return
+        const configured = data.TorznabUrls || []
+        setTrackers(configured)
+        setEnableRutor(!!data.EnableRutorSearch)
+        setSelectedTracker(!configured.length && data.EnableRutorSearch ? 'rutor' : -1)
+        setSettingsReady(true)
       })
-      .catch(() => {})
-  }, [])
+      .catch(error => {
+        if (error.code !== 'ERR_CANCELED') setSearchError(t('Torznab.SettingsFailed'))
+      })
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsAttempt])
 
-  const handleSearch = async () => {
-    if (!query) return
+  useEffect(
+    () => () => {
+      searchRequestRef.current.controller?.abort()
+    },
+    [],
+  )
+
+  const handleSearch = async (searchQuery = query) => {
+    const normalizedQuery = typeof searchQuery === 'string' ? searchQuery.trim() : query.trim()
+    if (!normalizedQuery || !settingsReady) return
+    setQuery(normalizedQuery)
     setLoading(true)
     setSearched(true)
     setResults([])
+    setSearchError('')
+    searchRequestRef.current.controller?.abort()
+    const requestId = searchRequestRef.current.id + 1
+    const controller = new AbortController()
+    searchRequestRef.current = { id: requestId, controller }
     try {
       let url = torznabSearchHost()
-      const params = { query }
+      const params = { query: normalizedQuery }
 
       if (selectedTracker === 'rutor') {
         url = searchHost()
@@ -74,14 +98,40 @@ export default function SearchDialog({ handleClose }) {
         params.index = selectedTracker
       }
 
-      const { data } = await axios.get(url, { params })
-      setResults(data || [])
+      const { data } = await axios.get(url, {
+        params,
+        signal: controller.signal,
+        timeout: 25000,
+      })
+      if (!Array.isArray(data)) throw new Error('Invalid search response')
+      if (searchRequestRef.current.id === requestId) {
+        setResults(data || [])
+      }
     } catch (error) {
-      setErrorMsg(t('Torznab.SearchFailed'))
+      if (error.code !== 'ERR_CANCELED' && searchRequestRef.current.id === requestId) {
+        setSearchError(
+          t(
+            error.code === 'ECONNABORTED' || error.response?.status === 504
+              ? 'Torznab.SearchTimeout'
+              : 'Torznab.SearchFailed',
+          ),
+        )
+      }
     } finally {
-      setLoading(false)
+      if (searchRequestRef.current.id === requestId) {
+        setLoading(false)
+      }
     }
   }
+
+  useEffect(() => {
+    if (!initialQuery || !settingsReady) return
+    setQuery(initialQuery)
+    if (autoSearch) {
+      handleSearch(initialQuery)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery, autoSearch, settingsReady])
 
   const handleKeyDown = e => {
     if (e.key === 'Enter') {
@@ -156,10 +206,18 @@ export default function SearchDialog({ handleClose }) {
   }, [results, sortField, sortDirection])
 
   return (
-    <StyledDialog open onClose={handleClose} fullScreen={fullScreen} fullWidth maxWidth='md' ref={ref}>
+    <StyledDialog
+      className='cinema-dialog cinema-search-dialog'
+      open
+      onClose={handleClose}
+      fullScreen={fullScreen}
+      fullWidth
+      maxWidth='md'
+      ref={ref}
+    >
       <StyledHeader>{t('Torznab.SearchTorrents')}</StyledHeader>
-      <Content>
-        <div style={{ padding: '20px' }}>
+      <Content aria-busy={loading}>
+        <div className='search-body'>
           <div
             style={{
               display: 'flex',
@@ -179,17 +237,17 @@ export default function SearchDialog({ handleClose }) {
             >
               <InputLabel>{t('Tracker')}</InputLabel>
               <Select value={selectedTracker} onChange={e => setSelectedTracker(e.target.value)} label={t('Tracker')}>
-                <MenuItem value={-1}>{t('AllTrackers')}</MenuItem>
+                <MenuItem value={-1}>{t('Torznab.ConfiguredTrackers')}</MenuItem>
                 {enableRutor && <MenuItem value='rutor'>{t('Rutor')}</MenuItem>}
                 {trackers.map((tracker, index) => (
-                  <MenuItem key={`${tracker.Host}-${tracker.Key}`} value={index}>
+                  <MenuItem key={`${tracker.Host}-${tracker.Name}`} value={index}>
                     {tracker.Name || tracker.Host}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
             <TextField
-              label={t('Torznab.SearchTorznab')}
+              label={t('Torznab.SearchMoviesShows')}
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -202,8 +260,8 @@ export default function SearchDialog({ handleClose }) {
             <Button
               variant='contained'
               color='primary'
-              onClick={handleSearch}
-              disabled={loading}
+              onClick={() => handleSearch()}
+              disabled={loading || !settingsReady || !query.trim()}
               style={{
                 minWidth: fullScreen ? '80px' : '100px',
                 height: '40px',
@@ -215,15 +273,14 @@ export default function SearchDialog({ handleClose }) {
 
           {searched && results.length > 0 && (
             <div
+              className='search-sort-controls'
               style={{
                 display: 'flex',
                 gap: isMobile ? '8px' : '4px',
                 marginBottom: '16px',
                 alignItems: 'center',
                 padding: isMobile ? '12px 8px' : '8px 12px',
-                backgroundColor: 'rgba(0, 0, 0, 0.02)',
                 borderRadius: '4px',
-                border: '1px solid rgba(0, 0, 0, 0.08)',
                 flexWrap: isMobile ? 'wrap' : 'nowrap',
               }}
             >
@@ -260,9 +317,34 @@ export default function SearchDialog({ handleClose }) {
             </div>
           )}
 
-          <div style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
-            {searched && results.length === 0 && !loading && (
-              <Typography align='center' variant='body1' color='textSecondary'>
+          <div className='search-results'>
+            {loading && (
+              <div className='search-state' role='status'>
+                <CircularProgress color='primary' size={32} />
+                <Typography>{t('Torznab.WaitingForTracker')}</Typography>
+                <Button
+                  onClick={() => {
+                    searchRequestRef.current.controller?.abort()
+                    setLoading(false)
+                    setSearched(false)
+                  }}
+                >
+                  {t('Torznab.CancelSearch')}
+                </Button>
+              </div>
+            )}
+
+            {!loading && searchError && (
+              <div className='search-state search-error' role='alert'>
+                {searchError}
+                <Button onClick={() => (settingsReady ? handleSearch() : setSettingsAttempt(value => value + 1))}>
+                  {t('Torznab.RetrySearch')}
+                </Button>
+              </div>
+            )}
+
+            {searched && results.length === 0 && !loading && !searchError && (
+              <Typography className='search-state' align='center' variant='body1' color='textSecondary'>
                 {t('Torznab.NoResultsFound')}
               </Typography>
             )}
@@ -320,18 +402,11 @@ export default function SearchDialog({ handleClose }) {
       <Snackbar open={!!successMsg} autoHideDuration={1500} onClose={handleAlertClose} message={successMsg} />
       <Snackbar open={!!errorMsg} autoHideDuration={1500} onClose={handleAlertClose} message={errorMsg} />
 
-      <div
-        style={{
-          padding: '16px',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          borderTop: '1px solid rgba(0,0,0,0.12)',
-        }}
-      >
+      <Footer>
         <Button onClick={handleClose} color='secondary' variant='outlined'>
           {t('Close')}
         </Button>
-      </div>
+      </Footer>
     </StyledDialog>
   )
 }

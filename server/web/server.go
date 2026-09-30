@@ -21,6 +21,7 @@ import (
 	"server/web/msx"
 
 	"server/log"
+	"server/offline"
 	"server/torr"
 	"server/version"
 	"server/web/api"
@@ -131,6 +132,7 @@ func Wait() error {
 
 func Stop() {
 	dlna.Stop()
+	offline.Default().Close()
 	// Unmount FUSE filesystem if mounted
 	fuse.FuseCleanup()
 	BTS.Disconnect()

@@ -17,7 +17,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Action: add, get, set, rem, list, drop
+// Action: add, get, set, rem, list, drop, refresh_metadata
 type torrReqJS struct {
 	requestI
 	Link     string `json:"link,omitempty"`
@@ -27,6 +27,21 @@ type torrReqJS struct {
 	Poster   string `json:"poster,omitempty"`
 	Data     string `json:"data,omitempty"`
 	SaveToDB bool   `json:"save_to_db,omitempty"`
+}
+
+type torrentRefreshMetadataResp struct {
+	Processed int                           `json:"processed"`
+	Changed   int                           `json:"changed"`
+	Items     []torrentRefreshMetadataEntry `json:"items,omitempty"`
+}
+
+type torrentRefreshMetadataEntry struct {
+	Hash         string `json:"hash"`
+	TitleBefore  string `json:"title_before,omitempty"`
+	TitleAfter   string `json:"title_after,omitempty"`
+	Category     string `json:"category,omitempty"`
+	PosterBefore bool   `json:"poster_before"`
+	PosterAfter  bool   `json:"poster_after"`
 }
 
 // torrents godoc
@@ -74,6 +89,10 @@ func torrents(c *gin.Context) {
 	case "drop":
 		{
 			dropTorrent(req, c)
+		}
+	case "refresh_metadata":
+		{
+			refreshTorrentMetadata(c)
 		}
 	case "wipe":
 		{
@@ -132,6 +151,8 @@ func addTorrent(req torrReqJS, c *gin.Context) {
 			log.TLogln("error add torrent:", "timeout connection get torrent info")
 			return
 		}
+
+		autoProcessTorrentMetadata(tor, req.Title, req.Poster, req.Category)
 
 		if tor.Title == "" {
 			tor.Title = torrSpec.DisplayName // prefer dn over name
@@ -213,6 +234,41 @@ func dropTorrent(req torrReqJS, c *gin.Context) {
 	}
 	torr.DropTorrent(req.Hash)
 	c.Status(200)
+}
+
+func refreshTorrentMetadata(c *gin.Context) {
+	list := torr.ListTorrent()
+	resp := torrentRefreshMetadataResp{Processed: len(list)}
+
+	for _, tor := range list {
+		if tor == nil || tor.TorrentSpec == nil {
+			continue
+		}
+
+		beforeTitle := tor.Title
+		beforeCategory := tor.Category
+		beforePoster := tor.Poster
+		beforeData := tor.Data
+
+		autoProcessTorrentMetadata(tor, "", "", "")
+		torr.SaveTorrentToDB(tor)
+
+		if beforeTitle == tor.Title && beforeCategory == tor.Category && beforePoster == tor.Poster && beforeData == tor.Data {
+			continue
+		}
+
+		resp.Changed++
+		resp.Items = append(resp.Items, torrentRefreshMetadataEntry{
+			Hash:         tor.TorrentSpec.InfoHash.HexString(),
+			TitleBefore:  beforeTitle,
+			TitleAfter:   tor.Title,
+			Category:     tor.Category,
+			PosterBefore: beforePoster != "",
+			PosterAfter:  tor.Poster != "",
+		})
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func wipeTorrents(c *gin.Context) {

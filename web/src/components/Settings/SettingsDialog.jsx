@@ -3,7 +3,7 @@ import Button from '@material-ui/core/Button'
 import Switch from '@material-ui/core/Switch'
 import { FormControlLabel, useMediaQuery, useTheme } from '@material-ui/core'
 import { settingsHost } from 'utils/Hosts'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { clearTMDBCache } from 'components/Add/helpers'
 import AppBar from '@material-ui/core/AppBar'
@@ -31,34 +31,72 @@ export default function SettingsDialog({ handleClose }) {
   const [cacheSize, setCacheSize] = useState(32)
   const [cachePercentage, setCachePercentage] = useState(40)
   const [preloadCachePercentage, setPreloadCachePercentage] = useState(0)
-  const [isProMode, setIsProMode] = useState(JSON.parse(localStorage.getItem('isProMode')) || false)
-  const [isVlcUsed, setIsVlcUsed] = useState(JSON.parse(localStorage.getItem('isVlcUsed')) ?? false)
-  const [isInfuseUsed, setIsInfuseUsed] = useState(JSON.parse(localStorage.getItem('isInfuseUsed')) ?? false)
-  const [isIinaUsed, setIsIinaUsed] = useState(JSON.parse(localStorage.getItem('isIinaUsed')) ?? false)
+  const [isProMode, setIsProMode] = useState(readStoredBoolean('isProMode'))
+  const [isVlcUsed, setIsVlcUsed] = useState(readStoredBoolean('isVlcUsed'))
+  const [isInfuseUsed, setIsInfuseUsed] = useState(readStoredBoolean('isInfuseUsed'))
+  const [isIinaUsed, setIsIinaUsed] = useState(readStoredBoolean('isIinaUsed'))
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
-    axios.post(settingsHost(), { action: 'get' }).then(({ data }) => {
-      setSettings({ ...data, CacheSize: data.CacheSize / (1024 * 1024) })
-    })
-  }, [])
+    const controller = new AbortController()
+    let mounted = true
 
-  const ref = useOnStandaloneAppOutsideClick(handleClose)
+    setIsLoading(true)
+    setLoadError('')
+    axios
+      .post(settingsHost(), { action: 'get' }, { signal: controller.signal })
+      .then(({ data }) => {
+        if (mounted) setSettings({ ...data, CacheSize: data.CacheSize / (1024 * 1024) })
+      })
+      .catch(error => {
+        if (mounted && error?.code !== 'ERR_CANCELED') {
+          setSettings()
+          setLoadError(getSettingsError(error, t('SettingsDialog.SaveError')))
+        }
+      })
+      .finally(() => mounted && setIsLoading(false))
 
-  const handleSave = () => {
-    handleClose()
+    return () => {
+      mounted = false
+      controller.abort()
+    }
+  }, [loadAttempt, t])
+
+  const requestClose = useCallback(() => {
+    if (!isSaving) handleClose()
+  }, [handleClose, isSaving])
+  const ref = useOnStandaloneAppOutsideClick(requestClose)
+
+  const handleSave = async () => {
+    if (!settings || isSaving) return
+
+    setIsSaving(true)
+    setSaveError('')
     const sets = JSON.parse(JSON.stringify(settings))
     sets.CacheSize = cacheSize * 1024 * 1024
     sets.ReaderReadAHead = cachePercentage
     sets.PreloadCache = preloadCachePercentage
-    axios.post(settingsHost(), { action: 'set', sets })
-    // Clear TMDB cache so fresh settings are fetched on next poster search
-    clearTMDBCache()
-    localStorage.setItem('isVlcUsed', isVlcUsed)
-    localStorage.setItem('isInfuseUsed', isInfuseUsed)
-    localStorage.setItem('isIinaUsed', isIinaUsed)
+
+    try {
+      await axios.post(settingsHost(), { action: 'set', sets })
+      // Clear TMDB cache so fresh settings are fetched on next poster search.
+      clearTMDBCache()
+      writeStoredBoolean('isVlcUsed', isVlcUsed)
+      writeStoredBoolean('isInfuseUsed', isInfuseUsed)
+      writeStoredBoolean('isIinaUsed', isIinaUsed)
+      handleClose()
+    } catch (error) {
+      setSaveError(getSettingsError(error, t('SettingsDialog.SaveError')))
+      setIsSaving(false)
+    }
   }
 
   const inputForm = ({ target: { type, value, checked, id } }) => {
+    if (!settings) return
     const sets = JSON.parse(JSON.stringify(settings))
 
     if (type === 'number' || type === 'select-one') {
@@ -93,12 +131,12 @@ export default function SettingsDialog({ handleClose }) {
     setPreloadCachePercentage(PreloadCache)
   }, [CacheSize, ReaderReadAHead, PreloadCache])
 
-  const updateSettings = newProps => setSettings({ ...settings, ...newProps })
+  const updateSettings = newProps => setSettings(current => (current ? { ...current, ...newProps } : current))
   const handleChange = (_, newValue) => setSelectedTab(newValue)
   const handleChangeIndex = index => setSelectedTab(index)
 
   return (
-    <StyledDialog open onClose={handleClose} fullScreen={fullScreen} fullWidth maxWidth='md' ref={ref}>
+    <StyledDialog open onClose={requestClose} fullScreen={fullScreen} fullWidth maxWidth='md' ref={ref}>
       <SettingsHeader>
         <div>{t('SettingsDialog.Settings')}</div>
         <FormControlLabel
@@ -107,7 +145,7 @@ export default function SettingsDialog({ handleClose }) {
               checked={isProMode}
               onChange={({ target: { checked } }) => {
                 setIsProMode(checked)
-                localStorage.setItem('isProMode', checked)
+                writeStoredBoolean('isProMode', checked)
                 if (!checked) setSelectedTab(0)
               }}
               style={{ color: 'white' }}
@@ -146,8 +184,17 @@ export default function SettingsDialog({ handleClose }) {
         </StyledTabs>
       </AppBar>
 
-      <Content isLoading={!settings}>
-        {settings ? (
+      <Content isLoading={isLoading}>
+        {isLoading ? (
+          <CircularProgress color='secondary' />
+        ) : loadError ? (
+          <div role='alert' style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ marginBottom: 12 }}>{loadError}</div>
+            <Button color='secondary' onClick={() => setLoadAttempt(value => value + 1)} variant='outlined'>
+              {t('Update')}
+            </Button>
+          </div>
+        ) : settings ? (
           <>
             <SwipeableViews
               axis={direction === 'rtl' ? 'x-reverse' : 'x'}
@@ -190,13 +237,17 @@ export default function SettingsDialog({ handleClose }) {
               </TabPanel>
             </SwipeableViews>
           </>
-        ) : (
-          <CircularProgress color='secondary' />
-        )}
+        ) : null}
       </Content>
 
+      {saveError && (
+        <div role='alert' style={{ color: '#d32f2f', padding: '0 24px 8px' }}>
+          {saveError}
+        </div>
+      )}
+
       <FooterSection>
-        <Button onClick={handleClose} color='secondary' variant='outlined'>
+        <Button onClick={requestClose} color='secondary' variant='outlined' disabled={isSaving}>
           {t('Cancel')}
         </Button>
 
@@ -211,14 +262,43 @@ export default function SettingsDialog({ handleClose }) {
           }}
           color='secondary'
           variant='outlined'
+          disabled={!settings || isLoading || isSaving}
         >
           {t('SettingsDialog.ResetToDefault')}
         </Button>
 
-        <Button variant='contained' onClick={handleSave} color='secondary'>
-          {t('Save')}
+        <Button
+          variant='contained'
+          onClick={handleSave}
+          color='secondary'
+          disabled={!settings || isLoading || isSaving}
+        >
+          {isSaving ? <CircularProgress size={20} style={{ color: 'white' }} /> : t('Save')}
         </Button>
       </FooterSection>
     </StyledDialog>
   )
+}
+
+const readStoredBoolean = key => {
+  try {
+    return JSON.parse(localStorage.getItem(key)) ?? false
+  } catch (error) {
+    return false
+  }
+}
+
+const writeStoredBoolean = (key, value) => {
+  try {
+    localStorage.setItem(key, value)
+  } catch (error) {
+    // Browser storage is optional; server settings must remain usable when it is unavailable.
+  }
+}
+
+const getSettingsError = (error, fallback) => {
+  const responseData = error?.response?.data
+  const details =
+    (typeof responseData === 'string' && responseData.trim()) || responseData?.error || error?.message || fallback
+  return details.startsWith(fallback) ? details : `${fallback}${details}`
 }

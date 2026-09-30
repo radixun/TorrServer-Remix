@@ -1,12 +1,5 @@
 import styled, { css } from 'styled-components'
 
-const viewedPrimaryColor = '#858c90'
-const viewedSecondaryColor = '#8c9498'
-const viewedTertiaryColor = '#949ca0'
-const bigTableDividerColor = '#d2d2d2'
-const bigTableDefaultRowColor = '#f3f3f3'
-const bigTableViewedRowColor = '#ddd'
-
 const viewedIndicator = css`
   ${({
     theme: {
@@ -15,54 +8,100 @@ const viewedIndicator = css`
   }) => css`
     :before {
       content: '';
-      width: 10px;
-      height: 10px;
-      background: ${defaultPrimaryColor};
+      width: 22px;
+      height: 22px;
+      background: rgba(24, 201, 194, 0.16);
       border-radius: 50%;
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
+      border: 1px solid ${defaultPrimaryColor};
+    }
+
+    :after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -53%);
+      color: ${defaultPrimaryColor};
+      font-size: 14px;
+      font-weight: 900;
     }
   `}
 `
 export const TableStyle = styled.table`
   ${({
     theme: {
-      table: { defaultPrimaryColor },
+      table: {
+        borderColor,
+        defaultRowColor,
+        viewedRowColor,
+        hoverRowColor,
+        textColor,
+        buttonBorderColor,
+        buttonTextColor,
+        buttonBGColor,
+        buttonHoverBGColor,
+        buttonHoverBorderColor,
+        headerBGColor,
+        headerTextColor,
+        mutedTextColor,
+        primaryButtonBGColor,
+        primaryButtonTextColor,
+        offlineActionBGColor,
+        dangerTextColor,
+      },
     },
   }) => css`
     border-collapse: collapse;
-    margin: 25px 0;
-    font-size: 0.9em;
+    margin: 0;
+    font-size: 14px;
     width: 100%;
-    border-radius: 5px 5px 0 0;
+    table-layout: fixed;
+    border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-    color: #000;
+    border: 1px solid ${borderColor};
+    box-shadow: 0 12px 28px rgb(0 0 0 / 10%);
+    color: ${textColor};
 
     thead tr {
-      background: ${defaultPrimaryColor};
-      color: #fff;
+      background: ${headerBGColor};
+      color: ${headerTextColor};
       text-align: left;
       text-transform: uppercase;
     }
 
+    th {
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     th,
     td {
-      padding: 12px 15px;
+      padding: 12px 14px;
     }
 
     tbody tr {
-      border-bottom: 1px solid ${bigTableDividerColor};
-      background: ${bigTableDefaultRowColor};
+      border-bottom: 1px solid ${borderColor};
+      background: ${defaultRowColor};
+      transition: background 0.15s;
+
+      :hover {
+        background: ${hoverRowColor};
+      }
 
       :last-of-type {
-        border-bottom: 2px solid ${defaultPrimaryColor};
+        border-bottom: 0;
       }
 
       &.viewed-file-row {
-        background: ${bigTableViewedRowColor};
+        background: ${viewedRowColor};
       }
     }
 
@@ -74,13 +113,140 @@ export const TableStyle = styled.table`
       }
     }
 
-    .button-cell {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-      gap: 10px;
+    td[data-label='season'],
+    td[data-label='episode'],
+    td[data-label='resolution'],
+    td[data-label='duration'],
+    td[data-label='size'] {
+      white-space: nowrap;
+      font-size: 14px;
     }
 
-    @media (max-width: 970px) {
+    td[data-label='name'] {
+      strong {
+        display: block;
+        color: ${textColor};
+        font-size: 16px;
+        line-height: 1.22;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      span {
+        display: block;
+        margin-top: 4px;
+        color: ${mutedTextColor};
+        font-size: 13px;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    .actions-cell {
+      padding-left: 8px;
+      padding-right: 14px;
+    }
+
+    .file-action-stack {
+      display: grid;
+      gap: 7px;
+    }
+
+    .button-cell {
+      display: grid;
+      grid-template-columns: minmax(100px, 1fr) 54px 40px;
+      gap: 8px;
+      min-width: 0;
+
+      .MuiButton-root,
+      button {
+        border-color: ${buttonBorderColor};
+        color: ${buttonTextColor};
+        background: ${buttonBGColor};
+        font-weight: 700;
+        min-height: 36px;
+        min-width: 0;
+        padding-left: 8px;
+        padding-right: 8px;
+        white-space: nowrap;
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.1;
+        text-transform: none;
+      }
+
+      .icon-action {
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      .MuiButton-root:hover,
+      button:hover {
+        border-color: ${buttonHoverBorderColor};
+        background: ${buttonHoverBGColor};
+      }
+
+      > :first-child {
+        .MuiButton-root,
+        button {
+          color: ${primaryButtonTextColor};
+          border-color: transparent;
+          background: ${primaryButtonBGColor};
+        }
+      }
+
+      .MuiButton-label,
+      button span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      svg {
+        flex: 0 0 auto;
+      }
+    }
+
+    .offline-file-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 7px;
+
+      .MuiButton-root,
+      button {
+        min-width: 0;
+        min-height: 34px;
+        padding: 5px 8px;
+        border: 1px solid ${buttonBorderColor};
+        border-radius: 8px;
+        background: ${offlineActionBGColor};
+        color: ${buttonTextColor};
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.1;
+        text-transform: none;
+      }
+
+      .MuiButton-label,
+      button span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .delete-offline-file {
+        width: 38px;
+        padding: 0;
+        color: ${dangerTextColor};
+      }
+    }
+
+    @media (max-width: 1240px) {
       display: none;
     }
   `}
@@ -88,17 +254,12 @@ export const TableStyle = styled.table`
 
 export const ShortTableWrapper = styled.div`
   display: grid;
-  gap: 20px;
-  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  grid-template-columns: 1fr;
   display: none;
 
-  @media (max-width: 970px) {
+  @media (max-width: 1240px) {
     display: grid;
-  }
-
-  @media (max-width: 820px) {
-    gap: 15px;
-    grid-template-columns: 1fr;
   }
 `
 
@@ -106,54 +267,84 @@ export const ShortTable = styled.div`
   ${({
     isViewed,
     theme: {
-      table: { defaultPrimaryColor, defaultSecondaryColor, defaultTertiaryColor },
+      table: {
+        borderColor,
+        defaultRowColor,
+        viewedRowColor,
+        textColor,
+        buttonBorderColor,
+        buttonTextColor,
+        buttonBGColor,
+        buttonHoverBGColor,
+        buttonHoverBorderColor,
+        mutedTextColor,
+        primaryButtonBGColor,
+        primaryButtonTextColor,
+        offlineActionBGColor,
+        dangerTextColor,
+      },
     },
   }) => css`
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-areas:
+      'name buttons'
+      'data buttons'
+      'storage storage';
+    align-items: center;
+    gap: 6px 12px;
     width: 100%;
-    grid-template-rows: repeat(3, max-content);
-    border-radius: 5px;
-    overflow: hidden;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+    min-height: 76px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid ${borderColor};
+    background: ${isViewed ? viewedRowColor : defaultRowColor};
+    box-shadow: none;
 
     .short-table {
       &-name {
-        background: ${isViewed ? viewedPrimaryColor : defaultPrimaryColor};
-        display: grid;
-        place-items: center;
-        padding: 15px;
-        color: #fff;
-        text-transform: uppercase;
+        display: block;
+        grid-area: name;
+        min-width: 0;
+        color: ${textColor};
         font-size: 15px;
-        font-weight: bold;
+        font-weight: 700;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
 
         @media (max-width: 880px) {
-          font-size: 13px;
-          padding: 10px;
+          font-size: 15px;
         }
       }
       &-data {
-        display: grid;
-        grid-auto-flow: column;
-        grid-template-columns: ${isViewed ? 'max-content' : '1fr'};
-        grid-auto-columns: 1fr;
+        grid-area: data;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-width: 0;
       }
       &-field {
-        display: grid;
-        grid-template-rows: 30px 1fr;
-        background: black;
-        :not(:last-child) {
-          border-right: 1px solid ${isViewed ? viewedPrimaryColor : defaultPrimaryColor};
-        }
+        display: inline-grid;
+        grid-auto-flow: column;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        max-width: 100%;
+        padding: 4px 8px;
+        background: ${buttonBGColor};
+        border: 1px solid ${borderColor};
+        border-radius: 999px;
 
         &-name {
-          background: ${isViewed ? viewedSecondaryColor : defaultSecondaryColor};
-          color: #fff;
-          text-transform: uppercase;
-          font-size: 12px;
-          font-weight: 500;
-          display: grid;
-          place-items: center;
-          padding: 0 10px;
+          color: ${mutedTextColor};
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
 
           @media (max-width: 880px) {
             font-size: 11px;
@@ -161,17 +352,18 @@ export const ShortTable = styled.div`
         }
 
         &-value {
-          background: ${isViewed ? viewedTertiaryColor : defaultTertiaryColor};
-          display: grid;
-          place-items: center;
-          color: #fff;
-          font-size: 15px;
-          padding: 15px 10px;
+          color: ${textColor};
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.2;
           position: relative;
+          min-height: 14px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
 
           @media (max-width: 880px) {
             font-size: 13px;
-            padding: 12px 8px;
           }
         }
       }
@@ -181,19 +373,108 @@ export const ShortTable = styled.div`
       }
 
       &-buttons {
-        padding: 20px;
-        border-bottom: 2px solid ${isViewed ? viewedPrimaryColor : defaultPrimaryColor};
+        grid-area: buttons;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        grid-template-columns: minmax(104px, 1fr) 54px 42px;
         align-items: center;
-        gap: 20px;
-        background: #f3f3f3;
+        gap: 8px;
+
+        .MuiButton-root,
+        button {
+          border-color: ${buttonBorderColor};
+          color: ${buttonTextColor};
+          background: ${buttonBGColor};
+          font-weight: 700;
+          min-height: 36px;
+          min-width: 0;
+          padding-left: 8px;
+          padding-right: 8px;
+          border-radius: 8px;
+          font-size: 12px;
+          line-height: 1.1;
+          text-transform: none;
+          white-space: nowrap;
+        }
+
+        .icon-action {
+          padding-left: 0;
+          padding-right: 0;
+        }
+
+        .MuiButton-root:hover,
+        button:hover {
+          border-color: ${buttonHoverBorderColor};
+          background: ${buttonHoverBGColor};
+        }
+
+        .MuiButton-label,
+        button span {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        > :first-child {
+          .MuiButton-root,
+          button {
+            color: ${primaryButtonTextColor};
+            border-color: transparent;
+            background: ${primaryButtonBGColor};
+          }
+        }
 
         @media (max-width: 410px) {
-          gap: 10px;
-          grid-template-columns: 1fr;
+          grid-template-columns: minmax(96px, 1fr) 50px 40px;
+          gap: 6px;
         }
       }
+    }
+
+    .offline-file-actions {
+      grid-area: storage;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 7px;
+
+      .MuiButton-root,
+      button {
+        min-width: 0;
+        min-height: 36px;
+        padding: 5px 9px;
+        border: 1px solid ${buttonBorderColor};
+        border-radius: 8px;
+        background: ${offlineActionBGColor};
+        color: ${buttonTextColor};
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.1;
+        text-transform: none;
+      }
+
+      .MuiButton-label,
+      button span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .delete-offline-file {
+        width: 40px;
+        padding: 0;
+        color: ${dangerTextColor};
+      }
+    }
+
+    @media (max-width: 700px) {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        'name'
+        'data'
+        'buttons'
+        'storage';
+      align-items: stretch;
     }
   `}
 `

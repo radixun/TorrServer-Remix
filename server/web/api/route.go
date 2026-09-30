@@ -13,6 +13,7 @@ type requestI struct {
 
 func SetupRoute(route gin.IRouter) {
 	authorized := route.Group("/", auth.CheckAuth())
+	setupBrowserMedia(authorized)
 
 	authorized.GET("/shutdown", shutdown)
 	authorized.GET("/shutdown/*reason", shutdown)
@@ -25,6 +26,8 @@ func SetupRoute(route gin.IRouter) {
 	authorized.POST("/torrent/upload", torrentUpload)
 
 	authorized.POST("/cache", cache)
+	authorized.GET("/offline/:hash", offlineStatus)
+	authorized.POST("/offline", offlineAction)
 
 	route.HEAD("/stream", stream)
 	route.GET("/stream", stream)
@@ -34,6 +37,10 @@ func SetupRoute(route gin.IRouter) {
 
 	route.HEAD("/play/:hash/:id", play)
 	route.GET("/play/:hash/:id", play)
+	route.HEAD("/offline/stream/:hash/:id", offlineStream)
+	route.GET("/offline/stream/:hash/:id", offlineStream)
+	route.HEAD("/offline/stream/:hash/:id/*fname", offlineStream)
+	route.GET("/offline/stream/:hash/:id/*fname", offlineStream)
 
 	authorized.POST("/viewed", viewed)
 
@@ -45,14 +52,18 @@ func SetupRoute(route gin.IRouter) {
 	authorized.GET("/download/:size", download)
 
 	if config.SearchWA {
+		route.GET("/search", rutorSearch)
 		route.GET("/search/*query", rutorSearch)
 	} else {
+		authorized.GET("/search", rutorSearch)
 		authorized.GET("/search/*query", rutorSearch)
 	}
 
 	if config.SearchWA {
+		route.GET("/torznab/search", torznabSearch)
 		route.GET("/torznab/search/*query", torznabSearch)
 	} else {
+		authorized.GET("/torznab/search", torznabSearch)
 		authorized.GET("/torznab/search/*query", torznabSearch)
 	}
 
@@ -62,6 +73,10 @@ func SetupRoute(route gin.IRouter) {
 
 	// Add TMDB settings endpoint
 	authorized.GET("/tmdb/settings", tmdbSettings)
+	authorized.POST("/posters/search", postersSearch)
+	authorized.GET("/discover/search", discoverSearch)
+	authorized.GET("/discover/genres", discoverGenres)
+	authorized.GET("/discover/details", discoverDetails)
 
 	authorized.GET("/ffp/:hash/:id", ffp)
 }

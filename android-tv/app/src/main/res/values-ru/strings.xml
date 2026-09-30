@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TorrServer TV</string>
+    <string name="settings_title">Настройки TorrServer TV</string>
+    <string name="server_url">Адрес сервера</string>
+    <string name="save_and_open">Сохранить и открыть</string>
+    <string name="cancel">Отмена</string>
+    <string name="retry">Повторить</string>
+    <string name="connection_error">Не удалось подключиться к TorrServer</string>
+    <string name="invalid_server_url">Введите адрес TorrServer с HTTP или HTTPS</string>
+    <string name="player_error">Не удалось воспроизвести поток встроенным плеером.</string>
+    <string name="player_video_unsupported">Устройство не поддерживает формат видео в этом файле. Попробуйте открыть его в VLC или Kodi.</string>
+    <string name="player_audio_unsupported">Устройство не может декодировать ни одну звуковую дорожку в этом файле. Попробуйте открыть его в VLC или Kodi.</string>
+    <string name="open_vlc">Открыть в VLC</string>
+    <string name="open_kodi">Открыть в Kodi</string>
+    <string name="close">Закрыть</string>
+    <string name="exit_question">Выйти из TorrServer TV?</string>
+    <string name="audio_language">Язык звука</string>
+    <string name="subtitles">Субтитры</string>
+    <string name="subtitles_turn_off">Выключить субтитры</string>
+    <string name="subtitles_turn_on">Включить субтитры</string>
+    <string name="subtitle_language">Язык / дорожка субтитров</string>
+    <string name="subtitle_font">Шрифт текстовых субтитров</string>
+    <string name="subtitle_size">Размер текстовых субтитров</string>
+    <string name="subtitle_position">Положение по высоте</string>
+    <string name="no_tracks">В этом файле пока нет доступных поддерживаемых дорожек.</string>
+    <string name="track_number">Дорожка %1$d</string>
+    <string name="track_unsupported">Не поддерживается</string>
+    <string name="graphic_subtitles">Графические субтитры</string>
+    <string-array name="subtitle_fonts"><item>Без засечек</item><item>С засечками</item><item>Моноширинный</item></string-array>
+    <string-array name="subtitle_positions"><item>Исходное положение</item><item>Выше на 5%</item><item>Выше на 10%</item><item>Выше на 15%</item><item>Выше на 20%</item></string-array>
+</resources>

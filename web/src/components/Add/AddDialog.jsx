@@ -5,7 +5,7 @@ import axios from 'axios'
 import { useTranslation } from 'react-i18next'
 import debounce from 'lodash/debounce'
 import useChangeLanguage from 'utils/useChangeLanguage'
-import { useMediaQuery } from '@material-ui/core'
+import { FormHelperText, useMediaQuery } from '@material-ui/core'
 import CircularProgress from '@material-ui/core/CircularProgress'
 import usePreviousState from 'utils/usePreviousState'
 import { useQuery } from 'react-query'
@@ -45,11 +45,15 @@ export default function AddDialog({
   const [selectedFile, setSelectedFile] = useState()
   const [posterSearchLanguage, setPosterSearchLanguage] = useState(currentLang === 'ru' ? 'ru' : 'en')
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [skipDebounce, setSkipDebounce] = useState(false)
   const [isCustomTitleEnabled, setIsCustomTitleEnabled] = useState(false)
   const [currentSourceHash, setCurrentSourceHash] = useState()
 
-  const ref = useOnStandaloneAppOutsideClick(handleClose)
+  const requestClose = useCallback(() => {
+    if (!isSaving) handleClose()
+  }, [handleClose, isSaving])
+  const ref = useOnStandaloneAppOutsideClick(requestClose)
 
   const { data: torrents } = useQuery('torrents', getTorrents, { retry: 1, refetchInterval: 1000 })
 
@@ -60,22 +64,15 @@ export default function AddDialog({
 
   useEffect(() => {
     // checking if torrent already exists in DB
-    if (!setCurrentSourceHash) return
+    if (!currentSourceHash) return
 
-    const allHashes = torrents.map(({ hash }) => hash)
+    const allHashes = (torrents || []).map(({ hash }) => hash)
     setIsHashAlreadyExists(allHashes.includes(currentSourceHash))
   }, [currentSourceHash, torrents])
 
   useEffect(() => {
-    // closing dialog when torrent successfully added in DB
-    if (!isSaving) return
-
-    const allHashes = torrents.map(({ hash }) => hash)
-    allHashes.includes(currentSourceHash) && handleClose()
-    // FIXME! check api reply on add links
-    const linkRegex = /^(http(s?)):\/\/.*/i
-    torrentSource.match(linkRegex) !== null && handleClose()
-  }, [isSaving, torrents, torrentSource, currentSourceHash, handleClose])
+    setSaveError('')
+  }, [category, posterUrl, selectedFile, title, torrentSource])
 
   const fullScreen = useMediaQuery('@media (max-width:930px)')
 
@@ -199,32 +196,31 @@ export default function AddDialog({
     isUserInteractedWithPoster,
   ])
 
-  const handleSave = () => {
-    setIsSaving(true)
+  const handleSave = async () => {
+    if (isSaving) return
 
-    if (isEditMode) {
-      axios
-        .post(torrentsHost(), {
+    setIsSaving(true)
+    setSaveError('')
+
+    try {
+      if (isEditMode) {
+        await axios.post(torrentsHost(), {
           action: 'set',
           hash: originalHash,
           title: title || originalName,
           poster: posterUrl,
           category,
         })
-        .finally(handleClose)
-    } else if (selectedFile) {
-      // file save
-      const data = new FormData()
-      data.append('save', 'true')
-      data.append('file', selectedFile)
-      title && data.append('title', title)
-      category && data.append('category', category)
-      posterUrl && data.append('poster', posterUrl)
-      axios.post(torrentUploadHost(), data).catch(handleClose)
-    } else {
-      // link save
-      axios
-        .post(torrentsHost(), {
+      } else if (selectedFile) {
+        const formData = new FormData()
+        formData.append('save', 'true')
+        formData.append('file', selectedFile)
+        title && formData.append('title', title)
+        category && formData.append('category', category)
+        posterUrl && formData.append('poster', posterUrl)
+        await axios.post(torrentUploadHost(), formData)
+      } else {
+        await axios.post(torrentsHost(), {
           action: 'add',
           link: torrentSource,
           title,
@@ -232,12 +228,25 @@ export default function AddDialog({
           poster: posterUrl,
           save_to_db: true,
         })
-        .catch(handleClose)
+      }
+
+      handleClose()
+    } catch (error) {
+      setSaveError(getSaveError(error, t('Torznab.FailedToAddTorrent')))
+      setIsSaving(false)
     }
   }
 
   return (
-    <StyledDialog open onClose={handleClose} fullScreen={fullScreen} fullWidth maxWidth='md' ref={ref}>
+    <StyledDialog
+      className='cinema-dialog'
+      open
+      onClose={requestClose}
+      fullScreen={fullScreen}
+      fullWidth
+      maxWidth='md'
+      ref={ref}
+    >
       <StyledHeader>{t(isEditMode ? 'EditTorrent' : 'AddNewTorrent')}</StyledHeader>
 
       <Content isEditMode={isEditMode}>
@@ -279,15 +288,21 @@ export default function AddDialog({
         />
       </Content>
 
+      {saveError && (
+        <FormHelperText error role='alert' style={{ margin: '0 20px' }}>
+          {saveError}
+        </FormHelperText>
+      )}
+
       <ButtonWrapper>
-        <Button onClick={handleClose} color='secondary' variant='outlined'>
+        <Button onClick={requestClose} color='secondary' variant='outlined' disabled={isSaving}>
           {t('Cancel')}
         </Button>
 
         <Button
           variant='contained'
           style={{ minWidth: '110px' }}
-          disabled={!torrentSource || (isHashAlreadyExists && !isEditMode) || !isTorrentSourceCorrect}
+          disabled={isSaving || !torrentSource || (isHashAlreadyExists && !isEditMode) || !isTorrentSourceCorrect}
           onClick={handleSave}
           color='secondary'
         >
@@ -296,4 +311,10 @@ export default function AddDialog({
       </ButtonWrapper>
     </StyledDialog>
   )
+}
+
+const getSaveError = (error, fallback) => {
+  const responseData = error?.response?.data
+  if (typeof responseData === 'string' && responseData.trim()) return responseData
+  return responseData?.error || error?.message || fallback
 }

@@ -92,6 +92,8 @@ func torrentUpload(c *gin.Context) {
 				return
 			}
 
+			autoProcessTorrentMetadata(tor, title, poster, category)
+
 			if tor.Title == "" {
 				tor.Title = tor.Name()
 			}

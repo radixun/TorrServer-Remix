@@ -1,12 +1,7 @@
-import { forwardRef, memo, useState } from 'react'
-import {
-  UnfoldMore as UnfoldMoreIcon,
-  PlayArrow as PlayArrowIcon,
-  Close as CloseIcon,
-  Delete as DeleteIcon,
-} from '@material-ui/icons'
-import { getPeerString, humanizeSize, humanizeSpeed, removeRedundantCharacters } from 'utils/Utils'
-import { playlistTorrHost, streamHost, torrentsHost } from 'utils/Hosts'
+import { forwardRef, memo, useEffect, useState } from 'react'
+import { PlayArrow as PlayArrowIcon, Delete as DeleteIcon } from '@material-ui/icons'
+import { humanizeSize, removeRedundantCharacters } from 'utils/Utils'
+import { streamHost, torrentsHost } from 'utils/Hosts'
 import { NoImageIcon } from 'icons'
 import DialogTorrentDetailsContent from 'components/DialogTorrentDetailsContent'
 import Dialog from '@material-ui/core/Dialog'
@@ -34,11 +29,12 @@ import {
 
 const Transition = forwardRef((props, ref) => <Slide direction='up' ref={ref} {...props} />)
 
-const Torrent = ({ torrent }) => {
+const Torrent = ({ torrent, genreMaps }) => {
   const { t } = useTranslation()
   const [isDetailedInfoOpened, setIsDetailedInfoOpened] = useState(false)
   const [isDeleteTorrentOpened, setIsDeleteTorrentOpened] = useState(false)
   const [isSupported, setIsSupported] = useState(true)
+  const [posterFailed, setPosterFailed] = useState(false)
 
   const theme = useTheme()
   const fullScreen = useMediaQuery(theme.breakpoints.down('md'))
@@ -48,27 +44,18 @@ const Torrent = ({ torrent }) => {
   const openDeleteTorrentAlert = () => setIsDeleteTorrentOpened(true)
   const closeDeleteTorrentAlert = () => setIsDeleteTorrentOpened(false)
 
-  const {
-    title,
-    name,
-    category,
-    poster,
-    torrent_size: torrentSize,
-    download_speed: downloadSpeed,
-    hash,
-    stat,
-    data,
-  } = torrent
+  const { title, name, category, poster, torrent_size: torrentSize, hash, stat, data } = torrent
 
-  const dropTorrent = () => axios.post(torrentsHost(), { action: 'drop', hash })
+  useEffect(() => setPosterFailed(false), [poster])
+
   const deleteTorrent = () => axios.post(torrentsHost(), { action: 'rem', hash })
 
   const getParsedTitle = () => {
-    const parse = key => ptt.parse(title || '')?.[key] || ptt.parse(name || '')?.[key]
+    const parse = key => ptt.parse(String(title || ''))?.[key] || ptt.parse(String(name || ''))?.[key]
 
     const titleStrings = []
 
-    let parsedTitle = removeRedundantCharacters(parse('title'))
+    let parsedTitle = removeRedundantCharacters(parse('title') || String(title || name || ''))
     const parsedYear = parse('year')
     const parsedResolution = parse('resolution')
     if (parsedTitle) titleStrings.push(parsedTitle)
@@ -78,12 +65,18 @@ const Torrent = ({ torrent }) => {
     return { parsedTitle }
   }
   const { parsedTitle } = getParsedTitle()
+  const torrServerData = getTorrServerData(data)
+  const metadata = torrServerData.Metadata || {}
+  const tmdbMetadata = metadata?.tmdb || metadata?.TMDB || {}
+  const genreMap = genreMaps?.[tmdbMetadata.media_type || category] || {}
+  const genres = (tmdbMetadata.genre_ids || tmdbMetadata.GenreIDs || [])
+    .map(id => genreMap[String(id)])
+    .filter(Boolean)
+    .slice(0, 3)
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const handleClickOpenEditDialog = () => setIsEditDialogOpen(true)
   const handleCloseEditDialog = () => setIsEditDialogOpen(false)
-
-  const fullPlaylistLink = `${playlistTorrHost()}/${encodeURIComponent(parsedTitle || 'file')}.m3u?link=${hash}&m3u`
 
   const detailedInfoDialogRef = useOnStandaloneAppOutsideClick(closeDetailedInfo)
   // main categories
@@ -92,28 +85,37 @@ const Torrent = ({ torrent }) => {
   const getFileLink = (path, id) =>
     `${streamHost()}/${encodeURIComponent(path.split('\\').pop().split('/').pop())}?link=${hash}&index=${id}&play`
 
-  const fileList = (data && JSON.parse(data).TorrServer?.Files) || []
-  const playableVideoList = fileList.filter(({ path }) => isFilePlayable(path))
+  const fileList = Array.isArray(torrServerData.Files) ? torrServerData.Files : []
+  const playableVideoList = fileList.filter(file => file && isFilePlayable(file.path))
   const getVideoCaption = path => {
     // Get base name without extension
     const baseName = path.replace(/\.[^/.]+$/, '')
     // Find a file with the same base name and a subtitle extension
-    const captionFile = fileList.find(file => file.path.startsWith(baseName) && /\.(srt|vtt)$/i.test(file.path))
+    const captionFile = fileList.find(
+      file => typeof file.path === 'string' && file.path.startsWith(baseName) && /\.(srt|vtt)$/i.test(file.path),
+    )
     return captionFile ? getFileLink(captionFile.path, captionFile.id) : ''
   }
+  const hasPoster = !!poster && !posterFailed
+  const displayTitle = parsedTitle || title || name || t('Name')
   return (
     <>
       <TorrentCard>
-        <TorrentCardPoster isPoster={poster} onClick={handleClickOpenEditDialog}>
-          {poster ? <img src={poster} alt='poster' /> : <NoImageIcon />}
+        <TorrentCardPoster
+          type='button'
+          $hasPoster={hasPoster}
+          onClick={handleClickOpenEditDialog}
+          title={`${t('Edit')}: ${displayTitle}`}
+          aria-label={`${t('Edit')}: ${displayTitle}`}
+        >
+          {hasPoster ? (
+            <img src={poster} alt={displayTitle} onError={() => setPosterFailed(true)} draggable='false' />
+          ) : (
+            <NoImageIcon aria-hidden='true' />
+          )}
         </TorrentCardPoster>
 
         <TorrentCardButtons>
-          <StyledButton onClick={openDetailedInfo}>
-            <UnfoldMoreIcon />
-            <span>{t('Details')}</span>
-          </StyledButton>
-
           {playableVideoList?.length === 1 && isSupported ? (
             <VideoPlayer
               title={title}
@@ -122,24 +124,14 @@ const Torrent = ({ torrent }) => {
               onNotSupported={() => setIsSupported(false)}
             />
           ) : (
-            <StyledButton
-              onClick={() => {
-                window.open(fullPlaylistLink, '_blank')
-              }}
-            >
+            <StyledButton onClick={openDetailedInfo}>
               <PlayArrowIcon />
-              <span>{t('Playlist')}</span>
+              <span>{t('Watch')}</span>
             </StyledButton>
           )}
 
-          <StyledButton onClick={() => dropTorrent(torrent)}>
-            <CloseIcon />
-            <span>{t('Drop')}</span>
-          </StyledButton>
-
-          <StyledButton onClick={openDeleteTorrentAlert}>
+          <StyledButton $variant='delete' onClick={openDeleteTorrentAlert} aria-label={t('Delete')} title={t('Delete')}>
             <DeleteIcon />
-            <span>{t('Delete')}</span>
           </StyledButton>
         </TorrentCardButtons>
 
@@ -159,18 +151,13 @@ const Torrent = ({ torrent }) => {
               </div>
               <div className='description-statistics-element-value'>{torrentSize > 0 && humanizeSize(torrentSize)}</div>
             </div>
-
-            <div className='description-statistics-element-wrapper'>
-              <div className='description-section-name'>{t('Speed')}</div>
-              <div className='description-statistics-element-value'>
-                {downloadSpeed > 0 ? humanizeSpeed(downloadSpeed) : '---'}
+            {genres.length > 0 && (
+              <div className='description-genres' aria-label={t('Discovery.Genre')}>
+                {genres.map(genre => (
+                  <span key={genre}>{genre}</span>
+                ))}
               </div>
-            </div>
-
-            <div className='description-statistics-element-wrapper'>
-              <div className='description-section-name'>{t('Peers')}</div>
-              <div className='description-statistics-element-value'>{getPeerString(torrent) || '---'}</div>
-            </div>
+            )}
           </div>
         </TorrentCardDescription>
       </TorrentCard>
@@ -220,6 +207,14 @@ const Torrent = ({ torrent }) => {
       )}
     </>
   )
+}
+
+const getTorrServerData = value => {
+  try {
+    return value ? JSON.parse(value)?.TorrServer || {} : {}
+  } catch (error) {
+    return {}
+  }
 }
 
 export const StatusIndicator = ({ stat }) => {

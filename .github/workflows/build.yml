@@ -1,0 +1,23 @@
+name: Build Fork
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: npm install --global yarn@1.22.22
+      - run: ./build-all.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: torrserver-linux-amd64
+          path: dist/TorrServer-linux-amd64

@@ -14,7 +14,7 @@ import {
   Switch,
 } from '@material-ui/core'
 import { styled } from '@material-ui/core/styles'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { SecondarySettingsContent, SettingSectionLabel } from './style'
 
@@ -39,12 +39,13 @@ const StatusMessage = styled('div')(({ theme, severity }) => ({
 
 export default function SecondarySettingsComponent({ settings, inputForm }) {
   const { t } = useTranslation()
-  const [storageSettings, setStorageSettings] = useState({
-    settings: 'json',
-    viewed: 'bbolt',
-  })
+  const [storageSettings, setStorageSettings] = useState(null)
   const [storageStatus, setStorageStatus] = useState({ message: '', type: '' })
-  const [loading, setLoading] = useState(false)
+  const [storageLoading, setStorageLoading] = useState(true)
+  const [storageSaving, setStorageSaving] = useState(false)
+  const [storageLoadError, setStorageLoadError] = useState('')
+  const [storageLoadAttempt, setStorageLoadAttempt] = useState(0)
+  const isMounted = useRef(true)
   const {
     RetrackersMode,
     TorrentDisconnectTimeout,
@@ -71,6 +72,13 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
     EnableProxy,
     ProxyHosts,
   } = settings || {}
+
+  useEffect(() => {
+    isMounted.current = true
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
 
   // Local state for ProxyHosts text input
   const [proxyHostsText, setProxyHostsText] = useState('')
@@ -99,23 +107,43 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
   )
 
   useEffect(() => {
+    const controller = new AbortController()
+    let mounted = true
+
     const loadStorageSettings = async () => {
+      setStorageLoading(true)
+      setStorageLoadError('')
       try {
-        const response = await fetch(getApiUrl('/storage/settings')) // /api/storage/settings
-        if (response.ok) {
-          const prefs = await response.json()
-          setStorageSettings(prefs)
+        const response = await fetch(getApiUrl('/storage/settings'), { signal: controller.signal })
+        const prefs = await readJsonResponse(response)
+        if (!response.ok) throw new Error(prefs?.error || response.statusText)
+        if (mounted) {
+          setStorageSettings({
+            settings: prefs?.settings === 'bbolt' ? 'bbolt' : 'json',
+            viewed: prefs?.viewed === 'json' ? 'json' : 'bbolt',
+          })
         }
       } catch (error) {
-        // eslint-disable-line no-console
+        if (mounted && error.name !== 'AbortError') {
+          setStorageSettings(null)
+          setStorageLoadError(`${t('SettingsDialog.SaveError')}${error.message}`)
+        }
+      } finally {
+        if (mounted) setStorageLoading(false)
       }
     }
     loadStorageSettings()
-  }, [getApiUrl])
+
+    return () => {
+      mounted = false
+      controller.abort()
+    }
+  }, [getApiUrl, storageLoadAttempt, t])
 
   // Handle storage settings change
   const handleStorageChange = event => {
     const { name, value } = event.target
+    if (!storageSettings) return
     setStorageSettings(prev => ({
       ...prev,
       [name]: value,
@@ -124,7 +152,9 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
 
   // Save storage settings - add better error handling
   const saveStorageSettings = async () => {
-    setLoading(true)
+    if (!storageSettings || storageSaving) return
+
+    setStorageSaving(true)
     setStorageStatus({ message: t('SettingsDialog.Saving'), type: 'info' })
 
     try {
@@ -134,30 +164,34 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
         body: JSON.stringify(storageSettings),
       })
 
-      const result = await response.json()
+      const result = await readJsonResponse(response)
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to save settings')
       }
 
-      if (result.status === 'ok') {
+      if (isMounted.current) {
+        if (result.status === 'ok') {
+          setStorageStatus({
+            message: t('SettingsDialog.StorageSettingsSaved'),
+            type: 'success',
+          })
+        } else {
+          setStorageStatus({
+            message: t('SettingsDialog.SaveError') + (result.error || 'Unknown error'),
+            type: 'error',
+          })
+        }
+      }
+    } catch (error) {
+      if (isMounted.current) {
         setStorageStatus({
-          message: t('SettingsDialog.StorageSettingsSaved'),
-          type: 'success',
-        })
-      } else {
-        setStorageStatus({
-          message: t('SettingsDialog.SaveError') + (result.error || 'Unknown error'),
+          message: t('SettingsDialog.SaveError') + error.message,
           type: 'error',
         })
       }
-    } catch (error) {
-      setStorageStatus({
-        message: t('SettingsDialog.SaveError') + error.message,
-        type: 'error',
-      })
     } finally {
-      setLoading(false)
+      if (isMounted.current) setStorageSaving(false)
     }
   }
 
@@ -404,10 +438,11 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
           <Select
             id='settings'
             name='settings'
-            value={storageSettings.settings || 'json'}
+            value={storageSettings?.settings || ''}
             onChange={handleStorageChange}
             variant='outlined'
             margin='dense'
+            disabled={storageLoading || !storageSettings}
           >
             <MenuItem value='json'>{t('SettingsDialog.JsonFile')} (settings.json)</MenuItem>
             <MenuItem value='bbolt'>{t('SettingsDialog.BBoltDatabase')} (config.db)</MenuItem>
@@ -420,10 +455,11 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
           <Select
             id='viewed'
             name='viewed'
-            value={storageSettings.viewed || 'bbolt'}
+            value={storageSettings?.viewed || ''}
             onChange={handleStorageChange}
             variant='outlined'
             margin='dense'
+            disabled={storageLoading || !storageSettings}
           >
             <MenuItem value='bbolt'>{t('SettingsDialog.BBoltDatabase')} (config.db)</MenuItem>
             <MenuItem value='json'>{t('SettingsDialog.JsonFile')} (viewed.json)</MenuItem>
@@ -436,12 +472,21 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
             variant='contained'
             color='primary'
             onClick={saveStorageSettings}
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : null}
+            disabled={storageLoading || storageSaving || !storageSettings}
+            startIcon={storageLoading || storageSaving ? <CircularProgress size={20} /> : null}
           >
             {t('SettingsDialog.SaveStorageSettings')}
           </Button>
         </Box>
+
+        {storageLoadError && (
+          <StatusMessage severity='error' role='alert'>
+            <span>{storageLoadError}</span>
+            <Button onClick={() => setStorageLoadAttempt(value => value + 1)} size='small'>
+              {t('Update')}
+            </Button>
+          </StatusMessage>
+        )}
 
         {storageStatus.message && (
           <StatusMessage severity={storageStatus.type}>
@@ -495,4 +540,12 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
       />
     </SecondarySettingsContent>
   )
+}
+
+const readJsonResponse = async response => {
+  try {
+    return await response.json()
+  } catch (error) {
+    return {}
+  }
 }

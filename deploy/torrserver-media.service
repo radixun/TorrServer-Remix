@@ -1,0 +1,33 @@
+[Unit]
+Description=TorrServer browser media
+After=network.target torrserver.service
+
+[Service]
+Type=simple
+DynamicUser=yes
+SupplementaryGroups=render
+WorkingDirectory=/opt/torrserver-media
+ExecStart=/usr/bin/node /opt/torrserver-media/media-service.cjs
+Environment=TORRSERVER_URL=http://127.0.0.1:8090
+Environment=BROWSER_VIDEO_ENCODER=h264_vaapi
+Environment=BROWSER_MEDIA_PORT=8098
+Environment=LIBVA_DRIVER_NAME=iHD
+Environment=TMPDIR=/run/torrserver-media
+RuntimeDirectory=torrserver-media
+RuntimeDirectoryMode=0700
+Restart=on-failure
+RestartSec=3
+KillMode=control-group
+TimeoutStopSec=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+DevicePolicy=closed
+DeviceAllow=/dev/dri/renderD128 rw
+MemoryMax=2G
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

@@ -3,38 +3,45 @@ import styled, { css } from 'styled-components'
 export const TorrentCard = styled.div`
   ${({
     theme: {
-      torrentCard: { cardPrimaryColor },
+      torrentCard: { cardPrimaryColor, borderColor },
     },
   }) => css`
-    border-radius: 5px;
+    border-radius: 8px;
     display: grid;
-    grid-template-columns: 120px 260px 1fr;
-    grid-template-rows: 180px;
-    grid-template-areas: 'poster description buttons';
-    gap: 10px;
-    padding: 10px;
+    grid-template-columns: 126px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 42px;
+    grid-template-areas:
+      'poster description'
+      'poster buttons';
+    gap: 12px;
+    padding: 12px;
+    min-height: 198px;
     background: ${cardPrimaryColor};
-    box-shadow: 0px 2px 4px -1px rgb(0 0 0 / 20%), 0px 4px 5px 0px rgb(0 0 0 / 14%), 0px 1px 10px 0px rgb(0 0 0 / 12%);
+    border: 1px solid ${borderColor};
+    box-shadow: 0 10px 26px rgb(15 23 42 / 7%);
 
     @media (max-width: 1260px), (max-height: 500px) {
-      grid-template-areas:
-        'poster description'
-        'buttons buttons';
-
-      grid-template-columns: 70px 1fr;
-      grid-template-rows: 110px max-content;
+      grid-template-columns: 96px minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) 42px;
+      min-height: 164px;
     }
 
     @media (max-width: 770px) {
-      grid-template-columns: 60px 1fr;
-      grid-template-rows: 90px max-content;
+      grid-template-columns: 76px minmax(0, 1fr);
+      grid-template-rows: minmax(112px, auto) 40px;
+      gap: 12px;
+      min-height: 188px;
     }
   `}
 `
 
-export const TorrentCardPoster = styled.div`
+export const TorrentCardPoster = styled.button`
   grid-area: poster;
-  border-radius: 5px;
+  border-radius: 8px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
   overflow: hidden;
   text-align: center;
   cursor: pointer;
@@ -42,28 +49,33 @@ export const TorrentCardPoster = styled.div`
   position: relative;
 
   :hover {
-    filter: brightness(0.7);
+    filter: brightness(0.92);
+  }
+
+  :focus-visible {
+    outline: 3px solid ${({ theme }) => theme.torrentCard.accentCardColor};
+    outline-offset: 2px;
   }
 
   ${({
-    isPoster,
+    $hasPoster,
     theme: {
-      torrentCard: { cardSecondaryColor, accentCardColor },
+      torrentCard: { accentCardColor, posterEmptyBGColor },
     },
   }) =>
-    isPoster
+    $hasPoster
       ? css`
           img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 5px;
+            border-radius: 8px;
           }
         `
       : css`
           display: grid;
           place-items: center;
-          background: ${cardSecondaryColor};
+          background: ${posterEmptyBGColor};
           border: 1px solid ${accentCardColor};
 
           svg {
@@ -81,11 +93,10 @@ export const TorrentCardPoster = styled.div`
 export const TorrentCardButtons = styled.div`
   grid-area: buttons;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: stretch;
   gap: 10px;
-
-  @media (max-width: 1260px), (max-height: 500px) {
-    grid-template-columns: repeat(4, 1fr);
-  }
+  min-width: 0;
 
   @media (max-width: 340px) {
     gap: 5px;
@@ -94,25 +105,34 @@ export const TorrentCardButtons = styled.div`
 export const TorrentCardDescription = styled.div`
   ${({
     theme: {
-      torrentCard: { cardSecondaryColor, accentCardColor },
+      torrentCard: { cardSecondaryColor, accentCardColor, titleColor, statColor, buttonBGColor, borderColor },
     },
   }) => css`
     grid-area: description;
     background: ${cardSecondaryColor};
-    border-radius: 5px;
-    padding: 5px;
+    border-radius: 8px;
+    padding: 4px 0;
     display: grid;
-    grid-template-rows: 55% 1fr;
+    grid-template-rows: minmax(0, 1fr) max-content;
     gap: 10px;
+    min-width: 0;
+    overflow: hidden;
 
     @media (max-width: 770px) {
-      grid-template-rows: 60% 1fr;
-      gap: 3px;
+      grid-template-rows: minmax(44px, max-content) max-content;
+      gap: 8px;
+      align-content: space-between;
     }
 
     .description-title-wrapper {
       display: flex;
       flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+
+      @media (max-width: 770px) {
+        min-height: 44px;
+      }
     }
 
     // .description-title-wrapper > .description-section-name {
@@ -130,8 +150,8 @@ export const TorrentCardDescription = styled.div`
     .description-section-name {
       text-transform: uppercase;
       font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.4px;
+      font-weight: 700;
+      letter-spacing: 0;
       color: ${accentCardColor};
 
       @media (max-width: 770px) {
@@ -149,34 +169,92 @@ export const TorrentCardDescription = styled.div`
 
     .description-torrent-title {
       overflow: hidden;
-      word-break: break-all;
+      word-break: normal;
+      overflow-wrap: anywhere;
+      color: ${titleColor};
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1.25;
+      margin-top: 8px;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+
+      @media (max-width: 770px) {
+        font-size: 12px;
+        line-height: 1.2;
+        margin-top: 4px;
+        -webkit-line-clamp: 2;
+      }
+
+      @media (max-width: 410px) {
+        font-size: 12px;
+      }
     }
 
     .description-statistics-wrapper {
-      display: grid;
-      grid-template-columns: 80px 80px 1fr;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-width: 0;
       align-self: end;
 
-      @media (max-width: 1260px), (max-height: 500px) {
-        grid-template-columns: 70px 70px 1fr;
+      @media (max-width: 770px) {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+      }
+    }
+
+    .description-genres {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 0;
+
+      span {
+        padding: 5px 9px;
+        border: 1px solid ${borderColor};
+        border-radius: 999px;
+        background: ${buttonBGColor};
+        color: ${statColor};
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
       }
 
       @media (max-width: 770px) {
-        grid-template-columns: 65px 65px 1fr;
-      }
+        gap: 4px;
 
-      @media (max-width: 700px) {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        span {
+          padding: 4px 7px;
+          font-size: 8px;
+        }
       }
     }
 
     .description-statistics-element-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      min-height: 32px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: ${buttonBGColor};
+      border: 1px solid ${borderColor};
     }
 
     .description-statistics-element-value {
-      margin-bottom: 10px;
+      color: ${statColor};
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 0;
+      margin-bottom: 0;
       margin-left: 0;
+      white-space: nowrap;
 
       @media (max-width: 1260px), (max-height: 500px) {
         font-size: 0.7rem;
@@ -185,14 +263,19 @@ export const TorrentCardDescription = styled.div`
       }
     }
 
-    .description-torrent-title,
     .description-statistics-element-value {
       @media (max-width: 770px) {
-        font-size: 0.6rem;
+        font-size: 0.72rem;
       }
 
       @media (max-width: 410px) {
         font-size: 9px;
+      }
+    }
+
+    .description-statistics-element-value {
+      @media (max-width: 410px) {
+        font-size: 10px;
       }
     }
   `}
@@ -201,40 +284,60 @@ export const TorrentCardDescription = styled.div`
 export const StyledButton = styled.button`
   ${({
     theme: {
-      torrentCard: { buttonBGColor, accentCardColor },
+      torrentCard: {
+        buttonBGColor,
+        accentCardColor,
+        buttonHoverBGColor,
+        playColor,
+        deleteColor,
+        deleteBorderColor,
+        deleteHoverBGColor,
+        deleteHoverBorderColor,
+      },
     },
+    $variant,
   }) => css`
-    border-radius: 5px;
-    border: none;
+    border-radius: 8px;
+    border: 1px solid ${$variant === 'delete' ? deleteBorderColor : playColor};
     cursor: pointer;
-    transition: 0.2s;
+    transition: 0.18s;
     display: flex;
     align-items: center;
-    text-transform: uppercase;
-    background: ${buttonBGColor};
-    color: #fff;
-    font-size: 0.9rem;
-    letter-spacing: 0.009em;
-    padding: 0 12px;
+    justify-content: center;
+    text-transform: none;
+    background: ${$variant === 'delete' ? deleteHoverBGColor : buttonBGColor};
+    color: ${$variant === 'delete' ? deleteColor : playColor};
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    padding: 0 10px;
+    min-height: 40px;
+    min-width: 0;
+    width: 100%;
+    box-shadow: 0 6px 14px rgb(15 23 42 / 4%);
+
     svg {
-      width: 20px;
+      width: 18px;
+      height: 18px;
     }
 
     :hover {
-      background: ${accentCardColor};
+      background: ${$variant === 'delete' ? deleteHoverBGColor : buttonHoverBGColor};
+      border-color: ${$variant === 'delete' ? deleteHoverBorderColor : accentCardColor};
+      transform: translateY(-1px);
     }
 
     > :first-child {
-      margin-right: 10px;
+      margin-right: 8px;
     }
 
     @media (max-width: 1260px), (max-height: 500px) {
-      padding: 7px 10px;
+      padding: 0 10px;
       justify-content: center;
       font-size: 0.8rem;
 
       svg {
-        display: none;
+        display: block;
       }
     }
 
@@ -245,7 +348,25 @@ export const StyledButton = styled.button`
     @media (max-width: 420px) {
       font-size: 0.6rem;
       padding: 7px 5px;
+
+      span {
+        display: none;
+      }
+
+      > :first-child {
+        margin-right: 0;
+      }
     }
+
+    ${$variant === 'delete' &&
+    css`
+      min-width: 44px;
+      padding: 0;
+
+      > :first-child {
+        margin-right: 0;
+      }
+    `}
   `}
 `
 

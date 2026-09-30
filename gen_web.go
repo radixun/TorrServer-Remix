@@ -53,32 +53,20 @@ func main() {
 	compileHtml := "web/build/"
 	srcGo := "server/web/pages/"
 
-	// There are problems with running under windows
-	if err := run("rm", "-rf", srcGo+"template/pages"); err != nil {
-		if strings.Contains(err.Error(), "executable file not found") {
-			// Adding the ability to run on Windows with standard Go commands
-			if err = os.RemoveAll(srcGo + "template/pages"); err != nil {
-				log.Default().Fatalln(err.Error())
-			}
-		} else {
-			log.Default().Fatalln(err.Error())
-		}
+	// A release embeds exactly one fresh build on every platform.
+	if err := os.RemoveAll(srcGo + "template/pages"); err != nil {
+		log.Fatal(err)
 	}
-	// There are problems with running under windows
-	if err := run("cp", "-r", compileHtml, srcGo+"template/pages/"); err != nil {
-		if strings.Contains(err.Error(), "executable file not found") {
-			// Adding the ability to run on Windows with standard Go commands
-			if err = os.CopyFS(srcGo+"template/pages/", os.DirFS(filepath.Dir(compileHtml))); err != nil {
-				log.Default().Fatalln(err.Error())
-			}
-		} else {
-			log.Default().Fatalln(err.Error())
-		}
+	if err := os.CopyFS(srcGo+"template/pages", os.DirFS(filepath.Clean(compileHtml))); err != nil {
+		log.Fatal(err)
 	}
 
 	files := make([]string, 0)
 
-	filepath.WalkDir(srcGo+"template/pages/", func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(srcGo+"template/pages/", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if !d.IsDir() {
 			name := strings.TrimPrefix(path, srcGo+"template/")
 			if strings.Contains(name, "\\") {
@@ -91,6 +79,9 @@ func main() {
 		}
 		return nil
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	sort.Strings(files)
 	fmap := writeEmbed(srcGo+"template/html.go", files)
 	writeRoute(srcGo+"template/route.go", fmap)
@@ -136,11 +127,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func setWebCacheHeaders(c *gin.Context, link string, etag string) {
+	if link == "/" || link == "/index.html" || link == "/site.webmanifest" || link == "/asset-manifest.json" {
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+	} else {
+		c.Header("Cache-Control", "public, max-age=31536000")
+	}
+	c.Header("ETag", etag)
+}
+
 func RouteWebPages(route gin.IRouter) {
 	route.GET("/", func(c *gin.Context) {
 		etag := fmt.Sprintf("%x", md5.Sum(Indexhtml))
-		c.Header("Cache-Control", "public, max-age=31536000")
-		c.Header("ETag", etag)
+		setWebCacheHeaders(c, "/", etag)
 		c.Data(200, "text/html; charset=utf-8", Indexhtml)
 	})
 `
@@ -163,8 +164,7 @@ func RouteWebPages(route gin.IRouter) {
 		embedStr += `
 	route.GET("` + link + `", func(c *gin.Context) {
 		etag := fmt.Sprintf("%x", md5.Sum(` + fmap[link] + `))
-		c.Header("Cache-Control", "public, max-age=31536000")
-		c.Header("ETag", etag)
+		setWebCacheHeaders(c, "` + link + `", etag)
 		c.Data(200, "` + fmime + `", ` + fmap[link] + `)
 	})
 `

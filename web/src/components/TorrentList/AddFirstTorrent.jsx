@@ -1,4 +1,4 @@
-import { useTheme } from '@material-ui/core'
+import AddCircleOutlineIcon from '@material-ui/icons/AddCircleOutline'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -10,19 +10,12 @@ export default function AddFirstTorrent() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const handleClickOpen = () => setIsDialogOpen(true)
   const handleClose = () => setIsDialogOpen(false)
-  const primary = useTheme().palette.primary.main
+  const label = `${t('Add')}: ${t('NoTorrentsAdded')}`
 
   return (
     <>
-      <IconWrapper onClick={() => handleClickOpen(true)} isButton>
-        <lord-icon
-          src='https://cdn.lordicon.com/jkzgajyr.json'
-          trigger='loop'
-          delay='2000'
-          colors={`primary:#575757,secondary:${primary}`}
-          stroke='light'
-          scale='60'
-        />
+      <IconWrapper as='button' type='button' onClick={handleClickOpen} $isButton title={label} aria-label={label}>
+        <AddCircleOutlineIcon className='empty-state-icon' aria-hidden='true' />
         <div className='icon-label'>{t('NoTorrentsAdded')}</div>
       </IconWrapper>
 

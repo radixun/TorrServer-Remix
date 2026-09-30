@@ -89,7 +89,19 @@ type BTSets struct {
 }
 
 func (v *BTSets) String() string {
-	buf, _ := json.Marshal(v)
+	safeValue := *v
+	if safeValue.TMDBSettings.APIKey != "" {
+		safeValue.TMDBSettings.APIKey = "<redacted>"
+	}
+	if safeValue.TorznabUrls != nil {
+		safeValue.TorznabUrls = append([]TorznabConfig(nil), safeValue.TorznabUrls...)
+	}
+	for i := range safeValue.TorznabUrls {
+		if safeValue.TorznabUrls[i].Key != "" {
+			safeValue.TorznabUrls[i].Key = "<redacted>"
+		}
+	}
+	buf, _ := json.Marshal(&safeValue)
 	return string(buf)
 }
 

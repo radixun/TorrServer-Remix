@@ -1,21 +1,19 @@
-# TorrServer web client
+# TorrServer mod web client
 
-### How to start project
+React 17 / Create React App 4, with the cinema interface added by this fork.
+Node.js 24 and Yarn 1.22.22 are used for the documented build.
 
-0. ignore first two steps if the server is on `localhost`
-1. duplicate `.env_example` and rename it to `.env`
-2. in `.env` file add server address to `REACT_APP_SERVER_HOST` (without last "/")
-> `http://192.168.78.4:8090` - correct
->
-> `http://192.168.78.4:8090/` - wrong
-3. in `.env` file add TMDB api key
-4. `NODE_OPTIONS=--openssl-legacy-provider yarn start`
+```sh
+yarn install --frozen-lockfile
+NODE_OPTIONS=--openssl-legacy-provider GENERATE_SOURCEMAP=false yarn build
+```
 
-### Eslint
-> Prettier will fix the code every time the code is saved
+Leave `REACT_APP_SERVER_HOST` empty for a UI served by TorrServer itself.
+For a temporary desktop preview, run `../scripts/preview-web.cjs` with an
+explicit `TORRSERVER_URL`. The preview binds to loopback by default.
+Do not compile private URLs or API keys into a distributable build.
+Configure optional TMDB and Torznab credentials in the running server settings.
 
-- `yarn lint` - to find all linting problems
-- `yarn fix` - to fix code
-
-### How images were generated
-`npx pwa-asset-generator public/logo.png public -m public/site.webmanifest -p "calc(50vh - 25%) calc(50vw - 25%)" -b "linear-gradient(135deg, rgb(50,54,55), rgb(84,90,94))" -q 100 -i public/index.html -f`
+`yarn lint` checks source; `yarn fix` changes formatting.
+Generated output is `build/` and is excluded from Git. The root `build-all.sh`
+rebuilds it before generating the server's embedded pages.

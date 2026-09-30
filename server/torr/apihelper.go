@@ -1,6 +1,8 @@
 package torr
 
 import (
+	"encoding/hex"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -115,6 +117,48 @@ func GetTorrent(hashHex string) *Torrent {
 		}()
 	}
 	return tor
+}
+
+// EnsureTorrent returns an active torrent with metadata loaded. Unlike
+// GetTorrent, it waits for a database-only torrent to be attached to the
+// BitTorrent client, which is required by background consumers such as the
+// offline archive worker.
+func EnsureTorrent(hashHex string) (*Torrent, error) {
+	if bts == nil {
+		return nil, errors.New("BT client not initialized")
+	}
+	if len(hashHex) != 40 {
+		return nil, errors.New("invalid torrent hash")
+	}
+	if _, err := hex.DecodeString(hashHex); err != nil {
+		return nil, errors.New("invalid torrent hash")
+	}
+
+	hash := metainfo.NewHashFromHex(hashHex)
+	tor := bts.GetTorrent(hash)
+	if tor == nil {
+		dbTorrent := GetTorrentDB(hash)
+		if dbTorrent == nil || dbTorrent.TorrentSpec == nil {
+			return nil, errors.New("torrent not found")
+		}
+
+		var err error
+		tor, err = NewTorrent(dbTorrent.TorrentSpec, bts)
+		if err != nil {
+			return nil, err
+		}
+		tor.Title = dbTorrent.Title
+		tor.Poster = dbTorrent.Poster
+		tor.Category = dbTorrent.Category
+		tor.Data = dbTorrent.Data
+		tor.Size = dbTorrent.Size
+		tor.Timestamp = dbTorrent.Timestamp
+	}
+
+	if tor.Torrent == nil || !tor.GotInfo() {
+		return nil, errors.New("torrent metadata unavailable")
+	}
+	return tor, nil
 }
 
 func SetTorrent(hashHex, title, poster, category string, data string) *Torrent {

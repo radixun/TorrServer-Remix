@@ -1,0 +1,17 @@
+* text=auto
+*.sh text eol=lf
+*.go text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.cjs text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.gradle text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.jar binary
+*.syso binary

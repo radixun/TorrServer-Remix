@@ -8,14 +8,18 @@ export default styled.div`
   color: #fff;
   position: fixed;
   bottom: 0;
+  left: 0;
+  right: 0;
+  grid-area: footer;
   width: 100%;
   height: ${pwaFooterHeight}px;
+  z-index: 5;
 
   display: none;
 
   ${standaloneMedia(css`
     display: grid;
-    grid-template-columns: repeat(5, calc(100% / 5));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     justify-items: center;
   `)}
 `

@@ -73,8 +73,9 @@ export default function AboutDialog() {
               <span>{t('Links')}</span>
 
               <div>
-                <LinkComponent name={t('ProjectSource')} link='https://github.com/YouROK/TorrServer' />
-                <LinkComponent name={t('Releases')} link='https://github.com/YouROK/TorrServer/releases' />
+                <LinkComponent name={t('ProjectSource')} link='https://github.com/radixun/Torrserver_mod' />
+                <LinkComponent name={t('Releases')} link='https://github.com/radixun/Torrserver_mod/releases' />
+                <LinkComponent name='Upstream TorrServer' link='https://github.com/YouROK/TorrServer' />
                 <LinkComponent name={t('NasReleases')} link='https://github.com/vladlenas' />
                 <LinkComponent name={t('ApiDocs')} link='swagger/index.html' />
               </div>

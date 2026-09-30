@@ -8,6 +8,7 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -15,6 +16,26 @@ import (
 
 	"server/log"
 )
+
+func LooksLikeImgUrl(link string) bool {
+	parsedURL, err := url.Parse(link)
+	if err != nil {
+		return false
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return false
+	}
+
+	path := strings.ToLower(parsedURL.Path)
+	for _, extension := range []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"} {
+		if strings.HasSuffix(path, extension) {
+			return true
+		}
+	}
+
+	return false
+}
 
 func CheckImgUrl(link string) bool {
 	if link == "" {

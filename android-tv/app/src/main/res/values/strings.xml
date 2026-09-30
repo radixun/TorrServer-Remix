@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TorrServer TV</string>
+    <string name="settings_title">TorrServer TV settings</string>
+    <string name="server_url">Server URL</string>
+    <string name="save_and_open">Save and open</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Retry</string>
+    <string name="connection_error">Cannot connect to TorrServer</string>
+    <string name="invalid_server_url">Enter an HTTP or HTTPS server URL</string>
+    <string name="player_error">This stream could not be played internally.</string>
+    <string name="player_video_unsupported">This video format is not supported by this device. Try opening it in VLC or Kodi.</string>
+    <string name="player_audio_unsupported">This device cannot decode any audio track in this file. Try opening it in VLC or Kodi.</string>
+    <string name="open_vlc">Open in VLC</string>
+    <string name="open_kodi">Open in Kodi</string>
+    <string name="close">Close</string>
+    <string name="exit_question">Exit TorrServer TV?</string>
+    <string name="audio_language">Audio language</string>
+    <string name="subtitles">Subtitles</string>
+    <string name="subtitles_turn_off">Turn subtitles off</string>
+    <string name="subtitles_turn_on">Turn subtitles on</string>
+    <string name="subtitle_language">Subtitle language / track</string>
+    <string name="subtitle_font">Subtitle font (text tracks)</string>
+    <string name="subtitle_size">Subtitle size (text tracks)</string>
+    <string name="subtitle_position">Subtitle vertical position</string>
+    <string name="no_tracks">No supported tracks are available in this file yet.</string>
+    <string name="track_number">Track %1$d</string>
+    <string name="track_unsupported">Unsupported</string>
+    <string name="graphic_subtitles">Image subtitles</string>
+    <string-array name="subtitle_fonts"><item>Sans serif</item><item>Serif</item><item>Monospace</item></string-array>
+    <string-array name="subtitle_positions"><item>Original position</item><item>5% higher</item><item>10% higher</item><item>15% higher</item><item>20% higher</item></string-array>
+</resources>

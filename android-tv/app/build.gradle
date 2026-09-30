@@ -1,0 +1,59 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "home.jetnest.torrservertv"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "home.jetnest.torrservertv"
+        minSdk 23
+        targetSdk 35
+        versionCode 12
+        versionName "0.2.10"
+        testInstrumentationRunner "android.test.InstrumentationTestRunner"
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".preview"
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        resources.excludes += ["META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*"]
+    }
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir("generated/cinemaAssets"))
+}
+
+tasks.register("bundleCinema", Sync) {
+    from(rootProject.file("../web/build"))
+    into(layout.buildDirectory.dir("generated/cinemaAssets/cinema"))
+    exclude("**/*.map")
+    doFirst {
+        if (!rootProject.file("../web/build/index.html").exists()) {
+            throw new GradleException("Build web/ before assembling the TV application")
+        }
+    }
+}
+tasks.named("preBuild").configure { dependsOn("bundleCinema") }
+
+dependencies {
+    implementation project(":decoder-ffmpeg")
+    implementation "androidx.appcompat:appcompat:1.7.0"
+    implementation "androidx.media3:media3-exoplayer:1.5.1"
+    implementation "androidx.media3:media3-ui:1.5.1"
+    testImplementation "junit:junit:4.13.2"
+    androidTestCompileOnly files("${android.sdkDirectory}/platforms/android-35/optional/android.test.runner.jar",
+            "${android.sdkDirectory}/platforms/android-35/optional/android.test.base.jar")
+}

@@ -12,11 +12,11 @@ export default createGlobalStyle`
   }
 
   body {  
-    font-family: "Open Sans", sans-serif;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     box-sizing: border-box;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.1px;
+    letter-spacing: 0;
     -webkit-tap-highlight-color: transparent;
 
 
@@ -26,7 +26,7 @@ export default createGlobalStyle`
   }
 
   button {
-    font-family: "Open Sans", sans-serif;
-    letter-spacing: -0.1px;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: 0;
   }
 `

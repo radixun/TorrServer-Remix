@@ -16,7 +16,7 @@ Torznab settings can be configured via the Web UI under `Settings > Torznab`.
 Each Torznab indexer requires the following:
 
 - **Host URL**: The full URL to the Torznab API endpoint.
-  - Example: `http://192.168.1.10:9117/api/v2.0/indexers/all/results/torznab/` (Jackett)
+  - Example: `http://indexer.example:9117/api/v2.0/indexers/all/results/torznab/` (Jackett)
   - Example: `http://localhost:9696/1/api` (Prowlarr)
   - *Note*: Ensure the URL ends with `/` or `/api` as appropriate for your indexer manager, though the server attempts to handle pathing intelligently.
 - **API Key**: The API key provided by your Torznab indexer manager.

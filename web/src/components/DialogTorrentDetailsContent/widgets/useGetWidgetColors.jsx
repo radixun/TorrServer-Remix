@@ -6,14 +6,14 @@ const { LIGHT, DARK } = THEME_MODES
 
 const colors = {
   light: {
-    downloadSpeed: { iconBGColor: '#118f00', valueBGColor: '#13a300' },
-    uploadSpeed: { iconBGColor: '#0146ad', valueBGColor: '#0058db' },
-    peers: { iconBGColor: '#cdc118', valueBGColor: '#d8cb18' },
-    piecesCount: { iconBGColor: '#b6c95e', valueBGColor: '#c0d076' },
-    piecesLength: { iconBGColor: '#0982c8', valueBGColor: '#098cd7' },
-    status: { iconBGColor: '#aea25b', valueBGColor: '#b4aa6e' },
-    size: { iconBGColor: '#9b01ad', valueBGColor: '#ac03bf' },
-    category: { iconBGColor: '#914820', valueBGColor: '#c9632c' },
+    downloadSpeed: { iconBGColor: '#007f73', valueBGColor: '#009688' },
+    uploadSpeed: { iconBGColor: '#2f5f98', valueBGColor: '#3974b8' },
+    peers: { iconBGColor: '#8a7a15', valueBGColor: '#a38f16' },
+    piecesCount: { iconBGColor: '#5e7a7a', valueBGColor: '#71908f' },
+    piecesLength: { iconBGColor: '#346f86', valueBGColor: '#4087a3' },
+    status: { iconBGColor: '#69717c', valueBGColor: '#7d8794' },
+    size: { iconBGColor: '#7b4b93', valueBGColor: '#925ab0' },
+    category: { iconBGColor: '#9a5c2f', valueBGColor: '#b76f39' },
   },
   dark: {
     downloadSpeed: { iconBGColor: '#0c6600', valueBGColor: '#0d7000' },

@@ -36,3 +36,32 @@ toolchains/
 /toolchain/
 /server/web/pages/template/pages/msx
 
+# Android TV pilot
+/android-tv/.gradle/
+/android-tv/**/build/
+/android-tv/local.properties
+*.apk
+
+
+# Private agent work, local configuration and generated outputs
+/.agent-work/
+/.playwright-cli/
+/output/
+/docs/internal/
+/deploy/private/
+**/node_modules/
+/web/build/
+/server/web/pages/template/pages/
+/server/web/pages/template/html.go
+/server/web/pages/template/route.go
+.env
+.env.*
+!.env.example
+local.properties
+*.db
+*.sqlite*
+*.log
+*.apk
+*.aab
+*.jks
+*.keystore

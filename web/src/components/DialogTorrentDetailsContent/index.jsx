@@ -1,51 +1,67 @@
 import { NoImageIcon } from 'icons'
-import { humanizeSize, removeRedundantCharacters } from 'utils/Utils'
+import { getPeerString, humanizeSize, removeRedundantCharacters } from 'utils/Utils'
 import { useEffect, useState } from 'react'
-import { Button, ButtonGroup } from '@material-ui/core'
+import { Button, ButtonGroup, LinearProgress } from '@material-ui/core'
+import CancelIcon from '@material-ui/icons/Cancel'
+import CheckCircleIcon from '@material-ui/icons/CheckCircle'
+import DeleteSweepIcon from '@material-ui/icons/DeleteSweep'
+import DeleteForeverIcon from '@material-ui/icons/DeleteForever'
+import GetAppIcon from '@material-ui/icons/GetApp'
+import RefreshIcon from '@material-ui/icons/Refresh'
 import ptt from 'parse-torrent-title'
 import axios from 'axios'
-import { viewedHost } from 'utils/Hosts'
+import { discoveryDetailsHost, discoverySearchHost, offlineHost, torrentsHost, viewedHost } from 'utils/Hosts'
 import { GETTING_INFO, IN_DB } from 'torrentStates'
 import CircularProgress from '@material-ui/core/CircularProgress'
 import { useTranslation } from 'react-i18next'
+import { TORRENT_CATEGORIES } from 'components/categories'
 
-import { useUpdateCache, useGetSettings } from './customHooks'
+import { useOfflineStatus, useUpdateCache } from './customHooks'
 import DialogHeader from './DialogHeader'
-import TorrentCache from './TorrentCache'
 import Table from './Table'
-import DetailedView from './DetailedView'
 import {
+  ContentHeader,
+  DataActions,
+  DataFact,
+  DataFacts,
+  DataPanel,
   DialogContentGrid,
+  DetailScroll,
+  HeroContent,
+  HeroTag,
+  HeroTags,
+  HeroTitle,
+  HeroTitleRow,
   MainSection,
+  OfflineProgress,
+  OverviewCard,
   Poster,
+  SectionHeading,
   SectionTitle,
   SectionSubName,
-  WidgetWrapper,
-  LoadingProgress,
-  SectionHeader,
-  CacheSection,
   TorrentFilesSection,
-  Divider,
 } from './style'
-import { DownlodSpeedWidget, UploadSpeedWidget, PeersWidget, SizeWidget, StatusWidget, CategoryWidget } from './widgets'
-import TorrentFunctions from './TorrentFunctions'
 import { isFilePlayable } from './helpers'
 
 const Loader = () => (
-  <div style={{ minHeight: '80vh', display: 'grid', placeItems: 'center' }}>
+  <div style={{ minHeight: '35vh', display: 'grid', placeItems: 'center' }}>
     <CircularProgress color='secondary' />
   </div>
 )
 
+const DETAILS_TIMEOUT_MS = 8000
+
 export default function DialogTorrentDetailsContent({ closeDialog, torrent }) {
-  const { t } = useTranslation()
-  const [isLoading, setIsLoading] = useState(true)
-  const [isDetailedCacheView, setIsDetailedCacheView] = useState(false)
+  const { t, i18n } = useTranslation()
   const [viewedFileList, setViewedFileList] = useState()
   const [playableFileList, setPlayableFileList] = useState()
   const [seasonAmount, setSeasonAmount] = useState(null)
   const [selectedSeason, setSelectedSeason] = useState()
-  const [isSnakeDebugMode] = useState(JSON.parse(localStorage.getItem('isSnakeDebugMode')) || false)
+  const [overview, setOverview] = useState('')
+  const [genres, setGenres] = useState([])
+  const [runtimeMinutes, setRuntimeMinutes] = useState(null)
+  const [detailsTimedOut, setDetailsTimedOut] = useState(false)
+  const [posterFailed, setPosterFailed] = useState(false)
 
   const {
     poster,
@@ -54,16 +70,17 @@ export default function DialogTorrentDetailsContent({ closeDialog, torrent }) {
     category,
     name,
     stat,
-    download_speed: downloadSpeed,
-    upload_speed: uploadSpeed,
     torrent_size: torrentSize,
+    duration_seconds: torrentDurationSeconds,
     file_stats: torrentFileList,
+    data,
   } = torrent
 
-  const cache = useUpdateCache(hash)
-  const settings = useGetSettings(cache)
-
-  const { Capacity, PiecesCount, PiecesLength, Filled } = cache
+  const { error: cacheError, retry: retryCache, status: cacheStatus } = useUpdateCache(hash)
+  const [offlineStatus, setOfflineStatus] = useOfflineStatus(hash)
+  const torrentPending = stat === GETTING_INFO || stat === IN_DB
+  const hasRenderableDetails = Boolean(title || name || data || torrentFileList?.length)
+  const showInitialLoader = !hasRenderableDetails && torrentPending && !detailsTimedOut
 
   useEffect(() => {
     if (playableFileList && seasonAmount === null) {
@@ -84,26 +101,40 @@ export default function DialogTorrentDetailsContent({ closeDialog, torrent }) {
   }, [torrentFileList])
 
   useEffect(() => {
-    const cacheLoaded = !!Object.entries(cache).length
-    const torrentLoaded = stat !== GETTING_INFO && stat !== IN_DB
-
-    if (!cacheLoaded && !isLoading) setIsLoading(true)
-    if (cacheLoaded && isLoading && torrentLoaded) setIsLoading(false)
-  }, [stat, cache, isLoading])
+    setPosterFailed(false)
+  }, [poster])
 
   useEffect(() => {
+    setDetailsTimedOut(false)
+    if (!torrentPending) return undefined
+
+    const timerID = setTimeout(() => setDetailsTimedOut(true), DETAILS_TIMEOUT_MS)
+    return () => clearTimeout(timerID)
+  }, [hash, torrentPending])
+
+  useEffect(() => {
+    let mounted = true
+
     // getting viewed file list
-    axios.post(viewedHost(), { action: 'list', hash }).then(({ data }) => {
-      if (data) {
-        const lst = data.map(itm => itm.file_index).sort((a, b) => a - b)
-        setViewedFileList(lst)
-      } else setViewedFileList()
-    })
+    axios
+      .post(viewedHost(), { action: 'list', hash })
+      .then(({ data }) => {
+        if (!mounted) return
+        if (data) {
+          const lst = data.map(itm => itm.file_index).sort((a, b) => a - b)
+          setViewedFileList(lst)
+        } else setViewedFileList()
+      })
+      .catch(() => mounted && setViewedFileList())
+
+    return () => {
+      mounted = false
+    }
   }, [hash])
 
-  const preloadPerc = settings?.PreloadCache
-  const preloadSize = (Capacity / 100) * preloadPerc
-  const bufferSize = preloadSize > 33554432 ? preloadSize : 33554432 // Not less than 32MB
+  const torrentData = getTorrentData(data)
+  const metadata = torrentData?.Metadata || {}
+  const tmdbMetadata = metadata?.tmdb || metadata?.TMDB || {}
 
   const getParsedTitle = () => {
     const newNameStringArr = []
@@ -115,9 +146,11 @@ export default function DialogTorrentDetailsContent({ closeDialog, torrent }) {
     } else if (torrentParsedName?.title) newNameStringArr.push(removeRedundantCharacters(torrentParsedName?.title))
 
     // These 2 checks are needed to get year and resolution from torrent name if title does not have this info
-    if (torrentParsedName?.year && !newNameStringArr[0].includes(torrentParsedName?.year))
+    const primaryTitle = newNameStringArr[0] || ''
+
+    if (torrentParsedName?.year && !primaryTitle.includes(torrentParsedName?.year))
       newNameStringArr.push(torrentParsedName?.year)
-    if (torrentParsedName?.resolution && !newNameStringArr[0].includes(torrentParsedName?.resolution))
+    if (torrentParsedName?.resolution && !primaryTitle.includes(torrentParsedName?.resolution))
       newNameStringArr.push(torrentParsedName?.resolution)
 
     const newNameString = newNameStringArr.join('. ')
@@ -129,137 +162,370 @@ export default function DialogTorrentDetailsContent({ closeDialog, torrent }) {
     return lastDotShouldBeAdded ? `${newNameString}.` : newNameString
   }
 
+  const displayTitle = stripSeasonSuffix(title || metadata.title || getParsedTitle() || name || '')
+  const displaySubtitle =
+    tmdbMetadata.title && normalizeTitle(tmdbMetadata.title) !== normalizeTitle(displayTitle) ? tmdbMetadata.title : ''
+  const categoryLabel = getCategoryLabel(category || metadata.category, t)
+  const overviewQuery = stripSeasonSuffix(title || metadata.title || name || '')
+  const peerLabel = t('Peers').split('·')[0]
+  const metadataFiles = metadata.files || metadata.Files || []
+  const defaultDurationMinutes =
+    runtimeMinutes || (playableFileList?.length === 1 ? secondsToMinutes(torrentDurationSeconds) : null)
+  const dropTorrent = () => axios.post(torrentsHost(), { action: 'drop', hash })
+  const removeTorrentViews = () =>
+    axios.post(viewedHost(), { action: 'rem', hash, file_index: -1 }).then(() => setViewedFileList())
+  const offlineAction = (action, fileID) =>
+    axios
+      .post(offlineHost(), {
+        action,
+        hash,
+        title: displayTitle || title || name,
+        ...(fileID ? { file_id: fileID } : {}),
+      })
+      .then(({ data: response }) => setOfflineStatus(response))
+      .catch(error =>
+        setOfflineStatus(current => ({
+          ...current,
+          error: error?.response?.data?.error || error.message,
+        })),
+      )
+  const offlineStateLabel = getOfflineStateLabel(offlineStatus, t)
+  const isOfflineActive = offlineStatus.state === 'queued' || offlineStatus.state === 'downloading'
+  const isOfflineComplete = offlineStatus.state === 'completed'
+  const hasOfflineFiles = (offlineStatus.files || []).some(file => file.state !== 'not_downloaded')
+
+  useEffect(() => {
+    let isMounted = true
+    const mediaType = category === 'tv' || metadata?.category === 'tv' ? 'tv' : 'movie'
+    const query = stripSeasonSuffix(overviewQuery)
+
+    if (
+      !query ||
+      (category !== 'movie' && category !== 'tv' && metadata?.category !== 'movie' && metadata?.category !== 'tv')
+    ) {
+      setOverview('')
+      setGenres([])
+      setRuntimeMinutes(null)
+      return () => {
+        isMounted = false
+      }
+    }
+
+    setGenres([])
+    setRuntimeMinutes(null)
+    axios
+      .get(discoverySearchHost(), {
+        params: {
+          media_type: mediaType,
+          query,
+          language: i18n.language,
+        },
+      })
+      .then(({ data: response }) => {
+        if (!isMounted) return
+        const firstResult = response?.results?.[0]
+        setOverview(firstResult?.overview || '')
+
+        if (!firstResult?.id) return
+
+        axios
+          .get(discoveryDetailsHost(), {
+            params: {
+              id: firstResult.id,
+              media_type: firstResult.mediaType || mediaType,
+              language: i18n.language,
+            },
+          })
+          .then(({ data: details }) => {
+            if (isMounted) {
+              setRuntimeMinutes(normalizeMinutes(details?.runtime))
+              setGenres(normalizeGenres(details?.genres))
+            }
+          })
+          .catch(() => {
+            if (isMounted) {
+              setRuntimeMinutes(null)
+              setGenres([])
+            }
+          })
+      })
+      .catch(() => {
+        if (isMounted) {
+          setOverview('')
+          setGenres([])
+          setRuntimeMinutes(null)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [category, i18n.language, metadata?.category, overviewQuery])
+
   return (
     <>
-      <DialogHeader
-        onClose={closeDialog}
-        title={isDetailedCacheView ? t('DetailedCacheView.header') : t('TorrentDetails')}
-        {...(isDetailedCacheView && { onBack: () => setIsDetailedCacheView(false) })}
-      />
+      <DialogHeader onClose={closeDialog} title={t('TorrentDetails')} />
 
-      <div
-        style={{
-          minHeight: '80vh',
-          overflow: 'auto',
-          ...(isDetailedCacheView && { display: 'flex', flexDirection: 'column' }),
-        }}
-      >
-        {isLoading ? (
-          <Loader />
-        ) : isDetailedCacheView ? (
-          <DetailedView
-            downloadSpeed={downloadSpeed}
-            uploadSpeed={uploadSpeed}
-            torrent={torrent}
-            torrentSize={torrentSize}
-            PiecesCount={PiecesCount}
-            PiecesLength={PiecesLength}
-            stat={stat}
-            cache={cache}
-          />
-        ) : (
-          <DialogContentGrid>
-            <MainSection>
-              <Poster poster={poster}>{poster ? <img alt='poster' src={poster} /> : <NoImageIcon />}</Poster>
-
-              <div>
-                {title && name !== title ? (
-                  getParsedTitle().length > 90 ? (
-                    <>
-                      <SectionTitle>{ptt.parse(name).title}</SectionTitle>
-                      <SectionSubName mb={20}>{getParsedTitle()}</SectionSubName>
-                    </>
+      <DetailScroll>
+        {showInitialLoader && <Loader />}
+        {!showInitialLoader && (
+          <>
+            {torrentPending && !detailsTimedOut && (
+              <div role='status' style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 24px 0' }}>
+                <CircularProgress color='secondary' size={18} />
+                <span>{t('TorrentGettingInfo')}</span>
+              </div>
+            )}
+            {(detailsTimedOut || cacheStatus === 'error') && (
+              <div
+                role='alert'
+                style={{
+                  alignItems: 'center',
+                  background: 'rgba(211, 47, 47, 0.08)',
+                  border: '1px solid rgba(211, 47, 47, 0.35)',
+                  display: 'flex',
+                  gap: 12,
+                  justifyContent: 'space-between',
+                  margin: '16px 24px 0',
+                  padding: '10px 12px',
+                }}
+              >
+                <span>{cacheError || `${t('SettingsDialog.SaveError')}${t('TorrentGettingInfo')}`}</span>
+                {cacheStatus === 'error' && (
+                  <Button color='secondary' onClick={retryCache} size='small' variant='outlined'>
+                    {t('Update')}
+                  </Button>
+                )}
+              </div>
+            )}
+            <DialogContentGrid>
+              <MainSection>
+                <Poster poster={poster && !posterFailed}>
+                  {poster && !posterFailed ? (
+                    <img alt='poster' src={poster} onError={() => setPosterFailed(true)} />
                   ) : (
-                    <>
-                      <SectionTitle>{getParsedTitle()}</SectionTitle>
-                      <SectionSubName mb={20}>{ptt.parse(name || '')?.title}</SectionSubName>
-                    </>
-                  )
-                ) : (
-                  <SectionTitle mb={20}>{getParsedTitle()}</SectionTitle>
+                    <NoImageIcon />
+                  )}
+                </Poster>
+
+                <HeroContent>
+                  <HeroTitleRow>
+                    <HeroTitle>{displayTitle || getParsedTitle()}</HeroTitle>
+                    {genres.length > 0 && (
+                      <HeroTags aria-label={t('Discovery.Genre')}>
+                        {genres.map(genre => (
+                          <HeroTag key={genre}>{genre}</HeroTag>
+                        ))}
+                      </HeroTags>
+                    )}
+                    {displaySubtitle && <SectionSubName className='hero-subtitle'>{displaySubtitle}</SectionSubName>}
+                  </HeroTitleRow>
+
+                  <OverviewCard>
+                    <h3>{t('TorrentOverview')}</h3>
+                    <p>{overview || t('Discovery.NoOverview')}</p>
+                  </OverviewCard>
+                </HeroContent>
+
+                <DataPanel>
+                  <h3>{t('TorrentData')}</h3>
+                  <DataFacts>
+                    <DataFact>
+                      <span>{t('TorrentSize')}</span>
+                      <strong>{torrentSize > 0 ? humanizeSize(torrentSize) : t('None')}</strong>
+                    </DataFact>
+                    <DataFact>
+                      <span>{peerLabel}</span>
+                      <strong>{formatPeers(torrent)}</strong>
+                    </DataFact>
+                    <DataFact>
+                      <span>{t('Category')}</span>
+                      <strong>{categoryLabel}</strong>
+                    </DataFact>
+                    <DataFact>
+                      <span>{t('OfflineStorage.Title')}</span>
+                      <strong>{offlineStateLabel}</strong>
+                    </DataFact>
+                  </DataFacts>
+                  {isOfflineActive && (
+                    <OfflineProgress>
+                      <LinearProgress variant='determinate' value={Math.min(100, offlineStatus.progress || 0)} />
+                      <span>{formatOfflineProgress(offlineStatus, t)}</span>
+                    </OfflineProgress>
+                  )}
+                  {offlineStatus.error && offlineStatus.state !== 'unavailable' && (
+                    <OfflineProgress className='offline-error'>{offlineStatus.error}</OfflineProgress>
+                  )}
+                  <DataActions>
+                    {!isOfflineActive && !isOfflineComplete && (
+                      <Button
+                        className='offline-action'
+                        onClick={() => offlineAction('start')}
+                        variant='contained'
+                        color='secondary'
+                        startIcon={<GetAppIcon fontSize='small' />}
+                        disabled={!offlineStatus.available}
+                      >
+                        {offlineStatus.state === 'failed' || offlineStatus.state === 'cancelled'
+                          ? t('OfflineStorage.Retry')
+                          : t('OfflineStorage.DownloadAll')}
+                      </Button>
+                    )}
+                    {isOfflineActive && (
+                      <Button
+                        className='offline-action'
+                        onClick={() => offlineAction('cancel')}
+                        variant='outlined'
+                        color='primary'
+                        startIcon={<CancelIcon fontSize='small' />}
+                      >
+                        {t('OfflineStorage.Cancel')}
+                      </Button>
+                    )}
+                    {isOfflineComplete && (
+                      <Button
+                        className='offline-action'
+                        variant='outlined'
+                        color='primary'
+                        startIcon={<CheckCircleIcon fontSize='small' />}
+                        disabled
+                      >
+                        {t('OfflineStorage.Downloaded')}
+                      </Button>
+                    )}
+                    {(isOfflineComplete || hasOfflineFiles) && !isOfflineActive && (
+                      <Button
+                        className='offline-action'
+                        onClick={() => offlineAction('delete')}
+                        variant='outlined'
+                        color='primary'
+                        startIcon={<DeleteForeverIcon fontSize='small' />}
+                      >
+                        {t('OfflineStorage.Delete')}
+                      </Button>
+                    )}
+                    <Button
+                      onClick={removeTorrentViews}
+                      variant='outlined'
+                      color='primary'
+                      startIcon={<DeleteSweepIcon fontSize='small' />}
+                    >
+                      {t('RemoveViews')}
+                    </Button>
+                    <Button
+                      onClick={dropTorrent}
+                      variant='outlined'
+                      color='primary'
+                      startIcon={<RefreshIcon fontSize='small' />}
+                    >
+                      {t('DropTorrent')}
+                    </Button>
+                  </DataActions>
+                </DataPanel>
+              </MainSection>
+
+              <TorrentFilesSection>
+                <ContentHeader>
+                  <SectionHeading>{t('TorrentContent')}</SectionHeading>
+                  <SectionSubName>{t('TorrentContentHint')}</SectionSubName>
+                </ContentHeader>
+
+                {seasonAmount?.length > 1 && (
+                  <>
+                    <SectionSubName mb={7}>{t('SelectSeason')}</SectionSubName>
+                    <ButtonGroup style={{ marginBottom: '30px' }} color='secondary'>
+                      {seasonAmount.map(season => (
+                        <Button
+                          key={season}
+                          variant={selectedSeason === season ? 'contained' : 'outlined'}
+                          onClick={() => setSelectedSeason(season)}
+                        >
+                          {season}
+                        </Button>
+                      ))}
+                    </ButtonGroup>
+
+                    <SectionTitle mb={20}>
+                      {t('Season')} {selectedSeason}
+                    </SectionTitle>
+                  </>
                 )}
 
-                <WidgetWrapper>
-                  <DownlodSpeedWidget data={downloadSpeed} />
-                  <UploadSpeedWidget data={uploadSpeed} />
-                  <PeersWidget data={torrent} />
-                  <SizeWidget data={torrentSize} />
-                  <StatusWidget stat={stat} />
-                  <CategoryWidget data={category} />
-                </WidgetWrapper>
-
-                <Divider />
-
-                <TorrentFunctions
+                <Table
                   hash={hash}
-                  viewedFileList={viewedFileList}
                   playableFileList={playableFileList}
-                  name={name}
-                  title={title}
-                  setViewedFileList={setViewedFileList}
+                  viewedFileList={viewedFileList}
+                  selectedSeason={selectedSeason}
+                  seasonAmount={seasonAmount}
+                  metadataFiles={metadataFiles}
+                  defaultDurationMinutes={defaultDurationMinutes}
+                  offlineStatus={offlineStatus}
+                  onOfflineAction={offlineAction}
                 />
-              </div>
-            </MainSection>
-
-            <CacheSection>
-              <SectionHeader>
-                <SectionTitle mb={20}>{t('Buffer')}</SectionTitle>
-                {bufferSize <= 33554432 && <SectionSubName>{t('BufferNote')}</SectionSubName>}
-                <LoadingProgress
-                  value={Filled}
-                  style={{ marginTop: '5px' }}
-                  fullAmount={bufferSize}
-                  label={`${humanizeSize(bufferSize)} / ${humanizeSize(Filled) || `0 ${t('B')}`}`}
-                />
-              </SectionHeader>
-
-              <TorrentCache isMini cache={cache} isSnakeDebugMode={isSnakeDebugMode} />
-              <Button
-                style={{ marginTop: '30px' }}
-                variant='contained'
-                color='primary'
-                size='large'
-                onClick={() => setIsDetailedCacheView(true)}
-              >
-                {t('DetailedCacheView.button')}
-              </Button>
-            </CacheSection>
-
-            <TorrentFilesSection>
-              <SectionTitle mb={20}>{t('TorrentContent')}</SectionTitle>
-
-              {seasonAmount?.length > 1 && (
-                <>
-                  <SectionSubName mb={7}>{t('SelectSeason')}</SectionSubName>
-                  <ButtonGroup style={{ marginBottom: '30px' }} color='secondary'>
-                    {seasonAmount.map(season => (
-                      <Button
-                        key={season}
-                        variant={selectedSeason === season ? 'contained' : 'outlined'}
-                        onClick={() => setSelectedSeason(season)}
-                      >
-                        {season}
-                      </Button>
-                    ))}
-                  </ButtonGroup>
-
-                  <SectionTitle mb={20}>
-                    {t('Season')} {selectedSeason}
-                  </SectionTitle>
-                </>
-              )}
-
-              <Table
-                hash={hash}
-                playableFileList={playableFileList}
-                viewedFileList={viewedFileList}
-                selectedSeason={selectedSeason}
-                seasonAmount={seasonAmount}
-              />
-            </TorrentFilesSection>
-          </DialogContentGrid>
+              </TorrentFilesSection>
+            </DialogContentGrid>
+          </>
         )}
-      </div>
+      </DetailScroll>
     </>
   )
+}
+
+const getTorrentData = value => {
+  try {
+    return value ? JSON.parse(value)?.TorrServer : null
+  } catch (error) {
+    return null
+  }
+}
+
+const stripSeasonSuffix = value => removeRedundantCharacters(value || '').replace(/\s*\/\s*S\d{1,3}\s*$/i, '')
+
+const normalizeTitle = value => stripSeasonSuffix(value).toLowerCase()
+
+const formatPeers = torrent => (getPeerString(torrent) || '0 / 0').split('·')[0].trim()
+
+const normalizeMinutes = value => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) && numericValue > 0 ? Math.round(numericValue) : null
+}
+
+const normalizeGenres = value =>
+  Array.isArray(value)
+    ? value
+        .map(genre => (typeof genre === 'string' ? genre : genre?.name))
+        .filter(Boolean)
+        .slice(0, 4)
+    : []
+
+const secondsToMinutes = value => {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) && numericValue > 0 ? Math.round(numericValue / 60) : null
+}
+
+const getCategoryLabel = (category, t) => {
+  if (!category) return t('None')
+  const knownCategory = TORRENT_CATEGORIES.find(item => item.key === category)
+  return knownCategory ? t(knownCategory.name) : category
+}
+
+const getOfflineStateLabel = (status, t) => {
+  const labels = {
+    unavailable: t('OfflineStorage.Unavailable'),
+    not_downloaded: t('OfflineStorage.NotDownloaded'),
+    queued: t('OfflineStorage.Queued'),
+    downloading: t('OfflineStorage.Downloading'),
+    partial: t('OfflineStorage.Partial'),
+    completed: t('OfflineStorage.Downloaded'),
+    cancelled: t('OfflineStorage.Cancelled'),
+    failed: t('OfflineStorage.Failed'),
+    missing: t('OfflineStorage.Missing'),
+  }
+  return labels[status?.state] || t('OfflineStorage.NotDownloaded')
+}
+
+const formatOfflineProgress = (status, t) => {
+  const progress = Math.round(status?.progress || 0)
+  const speed = status?.download_speed > 0 ? ` · ${humanizeSize(status.download_speed)}/${t('Sec')}` : ''
+  return `${progress}%${speed}${status?.current_file ? ` · ${status.current_file}` : ''}`
 }
