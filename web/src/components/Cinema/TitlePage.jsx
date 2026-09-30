@@ -10,6 +10,7 @@ import InfoOutlinedIcon from '@material-ui/icons/InfoOutlined'
 import DeleteOutlineIcon from '@material-ui/icons/DeleteOutline'
 import CloseIcon from '@material-ui/icons/Close'
 import TuneIcon from '@material-ui/icons/Tune'
+import RadioButtonUncheckedIcon from '@material-ui/icons/RadioButtonUnchecked'
 import { useTranslation } from 'react-i18next'
 import { discoveryDetailsHost, discoverySearchHost, torrentsHost } from 'utils/Hosts'
 import { humanizeSize } from 'utils/Utils'
@@ -29,6 +30,7 @@ import {
 import useOffline, { offlineFile } from './useOffline'
 import useCinemaText from './text'
 import usePoster from './usePoster'
+import useViewed from './useViewed'
 
 const normalize = value =>
   String(value || '')
@@ -109,6 +111,7 @@ export default function TitlePage({ group, initialHash, onBack }) {
   const base = group.versions.find(item => item.hash === version) || group.torrent
   const torrent = useMemo(() => (fetched?.hash === base.hash ? { ...base, ...fetched } : base), [base, fetched])
   const offline = useOffline(torrent)
+  const viewed = useViewed(torrent.hash)
   const [selectedId, setSelectedId] = useState(null)
   const [season, setSeason] = useState(null)
   const [advanced, setAdvanced] = useState(false)
@@ -166,7 +169,10 @@ export default function TitlePage({ group, initialHash, onBack }) {
     if (!files.length || initialized.current === torrent.hash) return
     initialized.current = torrent.hash
     const recent = files
-      .map(item => ({ file: item, progress: readLocalProgress(`${torrent.hash}:${item.id}`) }))
+      .map(item => ({
+        file: item,
+        progress: readLocalProgress(`${torrent.hash}:${item.id}`),
+      }))
       .filter(item => item.progress?.position > 5)
       .sort((a, b) => b.progress.updatedAt - a.progress.updatedAt)[0]
     setSelectedId(recent?.file.id || null)
@@ -196,6 +202,29 @@ export default function TitlePage({ group, initialHash, onBack }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  const viewedButton = item => (
+    <button
+      type='button'
+      className={`cinema-button cinema-viewed${viewed.has(item.id) ? ' is-viewed' : ''}`}
+      aria-pressed={viewed.has(item.id)}
+      aria-label={`${viewed.has(item.id) ? c.markUnwatched : c.markWatched}: ${fileLabel(item, c.episode)}`}
+      title={viewed.has(item.id) ? c.markUnwatched : c.markWatched}
+      disabled={!viewed.isSuccess || viewed.pending}
+      onClick={() => viewed.action(viewed.has(item.id) ? 'rem' : 'set', item.id)}
+    >
+      {viewed.has(item.id) ? (
+        <CheckCircleOutlineIcon fontSize='small' />
+      ) : (
+        <RadioButtonUncheckedIcon fontSize='small' />
+      )}
+      {viewed.has(item.id) ? c.watched : c.unwatched}
+    </button>
+  )
+  const playbackClosed = () => {
+    setRefresh(value => value + 1)
+    viewed.refetch()
   }
 
   return (
@@ -275,7 +304,8 @@ export default function TitlePage({ group, initialHash, onBack }) {
                   mediaId={source.id}
                   buttonClassName='cinema-button primary'
                   buttonLabel={progress?.position > 5 ? c.resume : c.watch}
-                  onClosed={() => setRefresh(value => value + 1)}
+                  onPlaybackStarted={() => viewed.mark(file.id)}
+                  onClosed={playbackClosed}
                 />
                 <DownloadAction
                   file={file}
@@ -284,6 +314,7 @@ export default function TitlePage({ group, initialHash, onBack }) {
                   pending={offline.pending}
                   primary
                 />
+                {viewedButton(file)}
               </div>
               <p className='cinema-note'>
                 {source.fromDisk ? c.disk : c.streaming} · {file.resolution ? `${file.resolution} · ` : ''}
@@ -301,6 +332,14 @@ export default function TitlePage({ group, initialHash, onBack }) {
             </div>
           )}
           <p className='cinema-note'>{c.downloadHint}</p>
+          {(viewed.isError || viewed.actionError) && (
+            <div className='cinema-error' role='alert'>
+              <p>{viewed.actionError ? c.historySaveError : c.historyError}</p>
+              <button type='button' className='cinema-button' onClick={viewed.retry} disabled={viewed.pending}>
+                {c.retry}
+              </button>
+            </div>
+          )}
           {offline.data?.state === 'queued' && (
             <p className='cinema-note' role='status'>
               {c.queueHint}
@@ -386,9 +425,11 @@ export default function TitlePage({ group, initialHash, onBack }) {
                     captionSrc={captionSource(torrent, item, offline.data)}
                     mediaId={playback.id}
                     buttonClassName='cinema-button'
-                    onClosed={() => setRefresh(value => value + 1)}
+                    onPlaybackStarted={() => viewed.mark(item.id)}
+                    onClosed={playbackClosed}
                   />
                   <DownloadAction file={item} status={offline.data} action={offline.action} pending={offline.pending} />
+                  {viewedButton(item)}
                 </li>
               )
             })}
