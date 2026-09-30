@@ -1,7 +1,7 @@
 # Development Instructions
 
-This is a personal fork of YouROK/TorrServer; preserve upstream attribution and
-all third-party license notices. See README.md and docs/FORK_CHANGES.md.
+TorrServer Remix by radixun is a fork of YouROK/TorrServer; preserve upstream
+attribution and all third-party license notices. See README.md and docs/FORK_CHANGES.md.
 
 Use build-all.sh for a fresh web and server build. Generated embed bindings,
 web/build, dist, dependency caches and local configuration stay out of Git.

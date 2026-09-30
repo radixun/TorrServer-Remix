@@ -1,6 +1,6 @@
-# TorrServer mod
+# TorrServer Remix by radixun
 
-**A personal fork of [YouROK/TorrServer](https://github.com/YouROK/TorrServer),
+**A fork of [YouROK/TorrServer](https://github.com/YouROK/TorrServer),
 maintained by [radixun](https://github.com/radixun).** This is an unofficial
 modification, with its own source build; it is not an upstream TorrServer release.
 
