@@ -2,7 +2,7 @@ import axios from 'axios'
 import Button from '@material-ui/core/Button'
 import Switch from '@material-ui/core/Switch'
 import { FormControlLabel, useMediaQuery, useTheme } from '@material-ui/core'
-import { settingsHost } from 'utils/Hosts'
+import { settingsHost, gstSettingsHost } from 'utils/Hosts'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { clearTMDBCache } from 'components/Add/helpers'
@@ -20,6 +20,8 @@ import SecondarySettingsComponent from './SecondarySettingsComponent'
 import MobileAppSettings from './MobileAppSettings'
 import TorznabSettings from './TorznabSettings'
 import TMDBSettings from './TMDBSettings'
+import GStreamerSettings from './GStreamerSettings'
+import WAFSettings from './WAFSettings'
 
 export default function SettingsDialog({ handleClose }) {
   const { t } = useTranslation()
@@ -40,6 +42,25 @@ export default function SettingsDialog({ handleClose }) {
   const [isSaving, setIsSaving] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [gstAvailable, setGstAvailable] = useState(false)
+  const [wafDirty, setWAFDirty] = useState(false)
+  const tabMain = 0
+  const tabAdditional = 1
+  const tabSearch = 2
+  const tabApp = 3
+  const tabAccess = 4
+  const tabGStreamer = 5
+  const maxTab = gstAvailable ? tabGStreamer : tabAccess
+
+  useEffect(() => {
+    axios
+      .get(gstSettingsHost())
+      .then(({ data }) => setGstAvailable(Boolean(data.built_in)))
+      .catch(() => setGstAvailable(false))
+  }, [])
+
+  // eslint-disable-next-line no-alert
+  const confirmWAFDiscard = useCallback(() => !wafDirty || window.confirm(t('WAF.UnsavedConfirm')), [wafDirty, t])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -67,12 +88,12 @@ export default function SettingsDialog({ handleClose }) {
   }, [loadAttempt, t])
 
   const requestClose = useCallback(() => {
-    if (!isSaving) handleClose()
-  }, [handleClose, isSaving])
+    if (!isSaving && confirmWAFDiscard()) handleClose()
+  }, [handleClose, isSaving, confirmWAFDiscard])
   const ref = useOnStandaloneAppOutsideClick(requestClose)
 
   const handleSave = async () => {
-    if (!settings || isSaving) return
+    if (!settings || isSaving || !confirmWAFDiscard()) return
 
     setIsSaving(true)
     setSaveError('')
@@ -112,14 +133,20 @@ export default function SettingsDialog({ handleClose }) {
       )
         sets[id] = Boolean(!checked)
       else sets[id] = Boolean(checked)
-    } else if (type === 'url' || type === 'text') {
+    } else if (type === 'url' || type === 'text' || type === 'textarea') {
       sets[id] = value
     } else if (!type && value !== undefined) {
-      // Fallback for custom handlers that don't provide type (e.g., ProxyHosts array)
+      // Fallback for custom handlers that don't provide type
       sets[id] = value
     }
     setSettings(sets)
   }
+
+  useEffect(() => {
+    if (selectedTab > maxTab) {
+      setSelectedTab(0)
+    }
+  }, [gstAvailable, selectedTab, maxTab])
 
   const { CacheSize, ReaderReadAHead, PreloadCache } = settings || {}
 
@@ -132,8 +159,11 @@ export default function SettingsDialog({ handleClose }) {
   }, [CacheSize, ReaderReadAHead, PreloadCache])
 
   const updateSettings = newProps => setSettings(current => (current ? { ...current, ...newProps } : current))
-  const handleChange = (_, newValue) => setSelectedTab(newValue)
-  const handleChangeIndex = index => setSelectedTab(index)
+  const handleChangeIndex = index => {
+    if (selectedTab === tabAccess && index !== tabAccess && !confirmWAFDiscard()) return
+    setSelectedTab(index)
+  }
+  const handleChange = (_, newValue) => handleChangeIndex(newValue)
 
   return (
     <StyledDialog open onClose={requestClose} fullScreen={fullScreen} fullWidth maxWidth='md' ref={ref}>
@@ -144,6 +174,7 @@ export default function SettingsDialog({ handleClose }) {
             <Switch
               checked={isProMode}
               onChange={({ target: { checked } }) => {
+                if (!checked && selectedTab === tabAccess && !confirmWAFDiscard()) return
                 setIsProMode(checked)
                 writeStoredBoolean('isProMode', checked)
                 if (!checked) setSelectedTab(0)
@@ -178,9 +209,24 @@ export default function SettingsDialog({ handleClose }) {
             {...a11yProps(1)}
           />
 
-          <StyledTab label={t('Search')} {...a11yProps(2)} />
+          <StyledTab label={t('Search')} {...a11yProps(tabSearch)} />
 
-          <StyledTab label={t('SettingsDialog.Tabs.App')} {...a11yProps(3)} />
+          <StyledTab label={t('SettingsDialog.Tabs.App')} {...a11yProps(tabApp)} />
+
+          <StyledTab label={t('SettingsDialog.Tabs.Access')} {...a11yProps(tabAccess)} />
+
+          {gstAvailable && (
+            <StyledTab
+              disabled={!isProMode}
+              label={
+                <>
+                  <span>{t('GStreamer.Tab')}</span>
+                  {!isProMode && <span className='disabled-hint'>{t('SettingsDialog.Tabs.AdditionalDisabled')}</span>}
+                </>
+              }
+              {...a11yProps(tabGStreamer)}
+            />
+          )}
         </StyledTabs>
       </AppBar>
 
@@ -201,7 +247,7 @@ export default function SettingsDialog({ handleClose }) {
               index={selectedTab}
               onChangeIndex={handleChangeIndex}
             >
-              <TabPanel value={selectedTab} index={0} dir={direction}>
+              <TabPanel value={selectedTab} index={tabMain} dir={direction}>
                 <PrimarySettingsComponent
                   settings={settings}
                   inputForm={inputForm}
@@ -216,15 +262,20 @@ export default function SettingsDialog({ handleClose }) {
                 />
               </TabPanel>
 
-              <TabPanel value={selectedTab} index={1} dir={direction}>
+              <TabPanel value={selectedTab} index={tabAdditional} dir={direction}>
                 <SecondarySettingsComponent settings={settings} inputForm={inputForm} updateSettings={updateSettings} />
               </TabPanel>
 
-              <TabPanel value={selectedTab} index={2} dir={direction}>
-                <TorznabSettings settings={settings} inputForm={inputForm} updateSettings={updateSettings} />
+              <TabPanel value={selectedTab} index={tabSearch} dir={direction}>
+                <TorznabSettings
+                  settings={settings}
+                  inputForm={inputForm}
+                  updateSettings={updateSettings}
+                  isProMode={isProMode}
+                />
               </TabPanel>
 
-              <TabPanel value={selectedTab} index={3} dir={direction}>
+              <TabPanel value={selectedTab} index={tabApp} dir={direction}>
                 <TMDBSettings settings={settings} updateSettings={updateSettings} />
                 <MobileAppSettings
                   isVlcUsed={isVlcUsed}
@@ -235,6 +286,16 @@ export default function SettingsDialog({ handleClose }) {
                   setIsIinaUsed={setIsIinaUsed}
                 />
               </TabPanel>
+
+              <TabPanel value={selectedTab} index={tabAccess} dir={direction}>
+                <WAFSettings onDirtyChange={setWAFDirty} />
+              </TabPanel>
+
+              {gstAvailable && (
+                <TabPanel value={selectedTab} index={tabGStreamer} dir={direction}>
+                  <GStreamerSettings />
+                </TabPanel>
+              )}
             </SwipeableViews>
           </>
         ) : null}

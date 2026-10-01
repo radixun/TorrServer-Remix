@@ -2,11 +2,12 @@ package torr
 
 import (
 	"errors"
-	"server/torrshash"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
+
+	"server/torrshash"
 
 	utils2 "server/utils"
 
@@ -76,6 +77,12 @@ func NewTorrent(spec *torrent.TorrentSpec, bt *BTServer) (*Torrent, error) {
 		spec.Trackers = append(spec.Trackers, [][]string{trackers}...)
 	}
 
+	if len(spec.InfoBytes) == 0 {
+		if db := GetTorrentDB(spec.InfoHash); db != nil && db.TorrentSpec != nil {
+			spec.InfoBytes = db.TorrentSpec.InfoBytes
+		}
+	}
+
 	goTorrent, _, err := bt.client.AddTorrentSpec(spec)
 	if err != nil {
 		return nil, err
@@ -118,6 +125,9 @@ func (t *Torrent) WaitInfo() bool {
 
 	select {
 	case <-t.Torrent.GotInfo():
+		if t.TorrentSpec != nil && len(t.TorrentSpec.InfoBytes) == 0 {
+			t.TorrentSpec.InfoBytes = t.Torrent.Metainfo().InfoBytes
+		}
 		if t.bt != nil && t.bt.storage != nil {
 			t.cache = t.bt.storage.GetCache(t.Hash())
 			t.cache.SetTorrent(t.Torrent)
@@ -226,6 +236,9 @@ func (t *Torrent) updateRA() {
 }
 
 func (t *Torrent) expired() bool {
+	if t.cache == nil {
+		return false
+	}
 	return t.cache.Readers() == 0 && t.expiredTime.Before(time.Now()) && (t.Stat == state.TorrentWorking || t.Stat == state.TorrentClosed)
 }
 
@@ -284,6 +297,9 @@ func (t *Torrent) Close() bool {
 	if t == nil {
 		return false
 	}
+	if t.Stat == state.TorrentClosed {
+		return true
+	}
 	if settings.ReadOnly && t.cache != nil && t.cache.GetUseReaders() > 0 {
 		return false
 	}
@@ -291,7 +307,9 @@ func (t *Torrent) Close() bool {
 
 	if t.bt != nil {
 		t.bt.mu.Lock()
-		delete(t.bt.torrents, t.Hash())
+		if _, ok := t.bt.torrents[t.Hash()]; ok {
+			delete(t.bt.torrents, t.Hash())
+		}
 		t.bt.mu.Unlock()
 	}
 

@@ -15,6 +15,7 @@ import (
 	"server/torr/utils"
 
 	"github.com/alexflint/go-arg"
+	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/browser"
 
 	"server"
@@ -26,30 +27,31 @@ import (
 )
 
 type args struct {
-	Port        string `arg:"-p" help:"web server port (default 8090)"`
-	IP          string `arg:"-i" help:"web server addr (default empty)"`
-	Ssl         bool   `help:"enables https"`
-	SslPort     string `help:"web server ssl port, If not set, will be set to default 8091 or taken from db(if stored previously). Accepted if --ssl enabled."`
-	SslCert     string `help:"path to ssl cert file. If not set, will be taken from db(if stored previously) or default self-signed certificate/key will be generated. Accepted if --ssl enabled."`
-	SslKey      string `help:"path to ssl key file. If not set, will be taken from db(if stored previously) or default self-signed certificate/key will be generated. Accepted if --ssl enabled."`
-	Path        string `arg:"-d" help:"database and config dir path"`
-	LogPath     string `arg:"-l" help:"server log file path"`
-	WebLogPath  string `arg:"-w" help:"web access log file path"`
-	RDB         bool   `arg:"-r" help:"start in read-only DB mode"`
-	HttpAuth    bool   `arg:"-a" help:"enable http auth on all requests"`
-	DontKill    bool   `arg:"-k" help:"don't kill server on signal"`
-	UI          bool   `arg:"-u" help:"open torrserver page in browser"`
-	TorrentsDir string `arg:"-t" help:"autoload torrents from dir"`
-	TorrentAddr string `help:"Torrent client address, like 127.0.0.1:1337 (default :PeersListenPort)"`
-	PubIPv4     string `arg:"-4" help:"set public IPv4 addr"`
-	PubIPv6     string `arg:"-6" help:"set public IPv6 addr"`
-	SearchWA    bool   `arg:"-s" help:"search without auth"`
-	MaxSize     string `arg:"-m" help:"max allowed stream size (in Bytes)"`
-	TGToken     string `arg:"-T" help:"telegram bot token"`
-	FusePath    string `arg:"-f" help:"fuse mount path"`
-	WebDAV      bool   `help:"web dav enable"`
-	ProxyURL    string `help:"proxy URL for BitTorrent traffic (http, socks4, socks5, socks5h), e.g. socks5://user:password@127.0.0.1:8080"`
-	ProxyMode   string `help:"proxy mode: tracker (only HTTP trackers, default), peers (only peer connections), or full (all traffic)"`
+	Port        string   `arg:"-p" help:"web server port (default 8090)"`
+	IPs         []string `arg:"-i,--ip,separate" help:"web server bind addr (repeatable; default empty binds all interfaces)"`
+	Ssl         bool     `help:"enables https"`
+	SslPort     string   `help:"web server ssl port, If not set, will be set to default 8091 or taken from db(if stored previously). Accepted if --ssl enabled."`
+	SslCert     string   `help:"path to ssl cert file. If not set, will be taken from db(if stored previously) or default self-signed certificate/key will be generated. Accepted if --ssl enabled."`
+	SslKey      string   `help:"path to ssl key file. If not set, will be taken from db(if stored previously) or default self-signed certificate/key will be generated. Accepted if --ssl enabled."`
+	Path        string   `arg:"-d" help:"database and config dir path"`
+	LogPath     string   `arg:"-l" help:"server log file path"`
+	WebLogPath  string   `arg:"-w" help:"web access log file path"`
+	RDB         bool     `arg:"-r" help:"start in read-only DB mode"`
+	HttpAuth    bool     `arg:"-a" help:"enable http auth on all requests"`
+	DontKill    bool     `arg:"-k" help:"don't kill server on signal"`
+	UI          bool     `arg:"-u" help:"open torrserver page in browser"`
+	TorrentsDir string   `arg:"-t" help:"autoload torrents from dir"`
+	TorrentAddr string   `help:"Torrent client address, like 127.0.0.1:1337 (default :PeersListenPort)"`
+	PubIPv4     string   `arg:"-4" help:"set public IPv4 addr"`
+	PubIPv6     string   `arg:"-6" help:"set public IPv6 addr"`
+	SearchWA    bool     `arg:"-s" help:"search without auth"`
+	MaxSize     string   `arg:"-m" help:"max allowed stream size (in Bytes)"`
+	TGToken     string   `arg:"-T" help:"telegram bot token"`
+	FusePath    string   `arg:"-f" help:"fuse mount path"`
+	WebDAV      bool     `help:"web dav enable"`
+	ProxyURL    string   `help:"proxy URL for BitTorrent traffic (http, socks4, socks5, socks5h), e.g. socks5://user:password@127.0.0.1:8080"`
+	ProxyMode   string   `help:"proxy mode: tracker (only HTTP trackers, default), peers (only peer connections), or full (all traffic)"`
+	ForceHTTPS  bool     `arg:"--force-https" help:"redirect all HTTP requests to HTTPS (requires --ssl)"`
 }
 
 func (args) Version() string {
@@ -75,8 +77,8 @@ func main() {
 	settings.HttpAuth = params.HttpAuth
 	log.Init(params.LogPath, params.WebLogPath)
 
-	fmt.Println("=========== START ===========")
-	fmt.Println("TorrServer", version.Version+",", runtime.Version()+",", "CPU Num:", runtime.NumCPU())
+	log.TLogln("=========== START ===========")
+	log.TLogln("TorrServer", version.Version+",", runtime.Version()+",", "CPU Num:", runtime.NumCPU())
 	if params.HttpAuth {
 		log.TLogln("Use HTTP Auth file", settings.Path+"/accs.db")
 	}
@@ -127,10 +129,6 @@ func main() {
 		settings.PubIPv6 = params.PubIPv6
 	}
 
-	if params.TorrentsDir != "" {
-		go watchTDir(params.TorrentsDir)
-	}
-
 	if params.MaxSize != "" {
 		maxSize, err := strconv.ParseInt(params.MaxSize, 10, 64)
 		if err == nil {
@@ -148,7 +146,7 @@ func main() {
 
 	settings.Args = &settings.ExecArgs{
 		Port:        params.Port,
-		IP:          params.IP,
+		IPs:         params.IPs,
 		Ssl:         params.Ssl,
 		SslPort:     params.SslPort,
 		SslCert:     params.SslCert,
@@ -171,13 +169,25 @@ func main() {
 		WebDAV:      params.WebDAV,
 		ProxyURL:    params.ProxyURL,
 		ProxyMode:   params.ProxyMode,
+		ForceHTTPS:  params.ForceHTTPS,
 	}
 
 	if params.ProxyURL != "" {
 		log.TLogln("Proxy configured from CLI:", params.ProxyURL, "mode:", settings.Args.ProxyMode)
 	}
 
-	server.Start()
+	if params.ForceHTTPS && !params.Ssl {
+		log.TLogln("Error: --force-https requires --ssl")
+		os.Exit(1)
+	}
+
+	if err := server.Start(); err != nil {
+		log.TLogln(err)
+		os.Exit(1)
+	}
+	if params.TorrentsDir != "" {
+		go watchTDir(params.TorrentsDir)
+	}
 	log.TLogln(server.WaitServer())
 	log.Close()
 	time.Sleep(time.Second * 3)
@@ -185,44 +195,97 @@ func main() {
 }
 
 func watchTDir(dir string) {
-	time.Sleep(5 * time.Second)
-	path, err := filepath.Abs(dir)
+	path, err := filepath.Abs(dir) // Attempt to convert the provided dir path into an absolute (full) filesystem path.
 	if err != nil {
 		path = dir
+	} // If an error occurs while obtaining the absolute path, the original relative path is used.
+
+	watcher, err := fsnotify.NewWatcher() // Create a new filesystem watcher (event-based instead of polling).
+	if err != nil {
+		log.TLogln("Error creating watcher:", err)
+		return
 	}
-	for {
-		files, err := os.ReadDir(path)
-		if err == nil {
-			for _, file := range files {
-				filename := filepath.Join(path, file.Name())
-				if strings.ToLower(filepath.Ext(file.Name())) == ".torrent" {
-					sp, err := utils.OpenTorrentFile(filename)
-					if err == nil {
-						tor, err := torr.AddTorrent(sp, "", "", "", "")
-						if err == nil {
-							if tor.GotInfo() {
-								if tor.Title == "" {
-									tor.Title = tor.Name()
-								}
-								torr.SaveTorrentToDB(tor)
-								tor.Drop()
-								os.Remove(filename)
-								time.Sleep(time.Second)
-							} else {
-								log.TLogln("Error get info from torrent")
-							}
-						} else {
-							log.TLogln("Error parse torrent file:", err)
-						}
-					} else {
-						log.TLogln("Error parse file name:", err)
-					}
-				}
+	defer watcher.Close()
+
+	err = watcher.Add(path) // Add target directory to watcher to receive filesystem events.
+	if err != nil {
+		log.TLogln("Error adding directory to watcher:", err)
+		return
+	}
+
+	processFile := func(filename string) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.TLogln("Recovered from panic in watchTDir:", r)
 			}
-		} else {
-			log.TLogln("Error read dir:", err)
+		}()
+
+		if strings.ToLower(filepath.Ext(filename)) != ".torrent" {
+			return
 		}
-		time.Sleep(time.Second * 5)
+
+		sp, err := utils.OpenTorrentFile(filename)
+		if err != nil {
+			log.TLogln("Error parse file name:", err)
+			return
+		}
+
+		tor, err := torr.AddTorrent(sp, "", "", "", "")
+		if err != nil {
+			log.TLogln("Error parse torrent file:", err)
+			return
+		}
+
+		if !tor.GotInfo() {
+			log.TLogln("Error get info from torrent")
+			return
+		}
+
+		if tor.Title == "" {
+			tor.Title = tor.Name()
+		}
+
+		torr.SaveTorrentToDB(tor)
+		torr.DropTorrent(tor.Hash().HexString())
+
+		// Consume the source only after it has been imported.
+		if err := os.Remove(filename); err != nil {
+			log.TLogln("Error removing torrent file:", err)
+		}
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		log.TLogln("Error scanning torrent directory:", err)
+	} else {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				processFile(filepath.Join(path, entry.Name()))
+			}
+		}
+	}
+
+	for { // Start of an infinite loop for continuous background monitoring using filesystem events.
+
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+
+			// Process only file creation or modification events
+			if event.Op&(fsnotify.Create|fsnotify.Write) == 0 {
+				continue
+			}
+
+			processFile(event.Name)
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			// Log filesystem watcher errors
+			log.TLogln("Watcher error:", err)
+		}
 	}
 }
 

@@ -48,9 +48,12 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
   const isMounted = useRef(true)
   const {
     RetrackersMode,
+    TrackersListURL,
+    DefaultTrackers,
     TorrentDisconnectTimeout,
     EnableDebug,
     EnableDLNA,
+    EnableBonjour,
     EnableIPv6,
     FriendlyName,
     ForceEncrypt,
@@ -60,17 +63,18 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
     DisableDHT,
     DisablePEX,
     DisableUpload,
+    EnableLPD,
+    LPDIPv6,
     DownloadRateLimit,
     UploadRateLimit,
     ConnectionsLimit,
     PeersListenPort,
     ResponsiveMode,
+    MergeAllM3U,
     SslPort,
     SslCert,
     SslKey,
     ShowFSActiveTorr,
-    EnableProxy,
-    ProxyHosts,
   } = settings || {}
 
   useEffect(() => {
@@ -79,15 +83,6 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
       isMounted.current = false
     }
   }, [])
-
-  // Local state for ProxyHosts text input
-  const [proxyHostsText, setProxyHostsText] = useState('')
-
-  // Sync proxyHostsText with ProxyHosts when settings change
-  useEffect(() => {
-    const textValue = Array.isArray(ProxyHosts) ? ProxyHosts.join(', ') : ProxyHosts || ''
-    setProxyHostsText(textValue)
-  }, [ProxyHosts])
 
   // Use useMemo to compute basePath once
   const basePath = useMemo(() => {
@@ -238,6 +233,24 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
         />
         <FormHelperText margin='none'>{t('SettingsDialog.ForceEncryptHint')}</FormHelperText>
       </FormGroup>
+      <FormGroup>
+        <FormControlLabel
+          control={<Switch checked={EnableLPD} onChange={inputForm} id='EnableLPD' color='secondary' />}
+          label='LPD (Local Peer Discovery)'
+          labelPlacement='start'
+        />
+        <FormHelperText margin='none'>{t('SettingsDialog.EnableLPDHint')}</FormHelperText>
+      </FormGroup>
+      <FormGroup>
+        <FormControlLabel
+          control={
+            <Switch checked={LPDIPv6} onChange={inputForm} id='LPDIPv6' color='secondary' disabled={!EnableLPD} />
+          }
+          label='LPD IPv6'
+          labelPlacement='start'
+        />
+        <FormHelperText margin='none'>{t('SettingsDialog.EnableLPDIPv6Hint')}</FormHelperText>
+      </FormGroup>
       <TextField
         onChange={inputForm}
         margin='normal'
@@ -343,6 +356,14 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
         />
         <FormHelperText margin='none'>{t('SettingsDialog.ResponsiveModeHint')}</FormHelperText>
       </FormGroup>
+      <FormGroup>
+        <FormControlLabel
+          control={<Switch checked={MergeAllM3U} onChange={inputForm} id='MergeAllM3U' color='secondary' />}
+          label={t('SettingsDialog.MergeAllM3U')}
+          labelPlacement='start'
+        />
+        <FormHelperText margin='none'>{t('SettingsDialog.MergeAllM3UHint')}</FormHelperText>
+      </FormGroup>
       <br />
       <FormGroup style={{ marginBottom: '20px' }}>
         <InputLabel htmlFor='RetrackersMode'>{t('SettingsDialog.RetrackersMode')}</InputLabel>
@@ -363,13 +384,44 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
         </Select>
         <FormHelperText style={{ marginTop: '8px' }}>{t('SettingsDialog.RetrackersModeHint')}</FormHelperText>
       </FormGroup>
-      {/* DLNA Section */}
+      <TextField
+        onChange={inputForm}
+        margin='normal'
+        id='TrackersListURL'
+        label={t('SettingsDialog.TrackersListURL')}
+        helperText={t('SettingsDialog.TrackersListURLHint')}
+        value={TrackersListURL || ''}
+        type='url'
+        variant='outlined'
+        fullWidth
+      />
+      <TextField
+        onChange={inputForm}
+        margin='normal'
+        id='DefaultTrackers'
+        label={t('SettingsDialog.DefaultTrackers')}
+        helperText={t('SettingsDialog.DefaultTrackersHint')}
+        value={DefaultTrackers || ''}
+        type='text'
+        variant='outlined'
+        fullWidth
+        multiline
+        minRows={6}
+      />
       <SettingSectionLabel style={{ marginTop: '20px' }}>{t('DLNA')}</SettingSectionLabel>
       <FormControlLabel
         control={<Switch checked={EnableDLNA} onChange={inputForm} id='EnableDLNA' color='secondary' />}
         label={t('SettingsDialog.DLNA')}
         labelPlacement='start'
       />
+      <FormControlLabel
+        control={<Switch checked={EnableBonjour} onChange={inputForm} id='EnableBonjour' color='secondary' />}
+        label={t('SettingsDialog.Bonjour')}
+        labelPlacement='start'
+      />
+      <FormHelperText style={{ marginLeft: 0, marginTop: '-4px', marginBottom: '8px' }}>
+        {t('SettingsDialog.BonjourHint')}
+      </FormHelperText>
       <TextField
         onChange={inputForm}
         margin='normal'
@@ -497,47 +549,6 @@ export default function SecondarySettingsComponent({ settings, inputForm }) {
           </StatusMessage>
         )}
       </Box>
-      {/* ProxyP2P */}
-      <SettingSectionLabel style={{ marginTop: '20px' }}>{t('Proxy')}</SettingSectionLabel>
-      <FormGroup>
-        <FormControlLabel
-          control={<Switch checked={EnableProxy} onChange={inputForm} id='EnableProxy' color='secondary' />}
-          label={t('SettingsDialog.EnableProxy')}
-          labelPlacement='start'
-        />
-        <FormHelperText margin='none'>{t('SettingsDialog.EnableProxyHint')}</FormHelperText>
-      </FormGroup>
-      {/* Proxy hosts */}
-      <TextField
-        onChange={e => {
-          setProxyHostsText(e.target.value)
-        }}
-        onBlur={e => {
-          const inputValue = e.target.value.trim()
-          const hostsArray =
-            inputValue === ''
-              ? []
-              : inputValue
-                  .split(',')
-                  .map(s => s.trim())
-                  .filter(s => s !== '')
-
-          inputForm({
-            target: {
-              id: 'ProxyHosts',
-              value: hostsArray,
-            },
-          })
-        }}
-        margin='normal'
-        id='ProxyHosts'
-        label={t('SettingsDialog.ProxyHosts')}
-        helperText={t('SettingsDialog.ProxyHostsHint')}
-        value={proxyHostsText}
-        type='text'
-        variant='outlined'
-        fullWidth
-      />
     </SecondarySettingsContent>
   )
 }

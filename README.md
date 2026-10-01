@@ -4,10 +4,10 @@
 maintained by [radixun](https://github.com/radixun).** This is an unofficial
 modification, with its own source build; it is not an upstream TorrServer release.
 
-The source base is **MatriX.141**, upstream commit
-[`d266990face0a530880a19a3e39666d21931aed9`](https://github.com/YouROK/TorrServer/commit/d266990face0a530880a19a3e39666d21931aed9).
+The source base is **MatriX.145.1**, upstream commit
+[`5b294b0b5386ba790347738ac3f80121688f5feb`](https://github.com/YouROK/TorrServer/commit/5b294b0b5386ba790347738ac3f80121688f5feb).
 The existing TV client version is **0.2.10** (version code 12).
-The fork build identifies the server as `MatriX.141-mod`; this distinguishes
+The fork build identifies the server as `MatriX.145.1-mod`; this distinguishes
 modified binaries from the original version. `FORK_VERSION` can override it.
 
 ## What this fork changes
@@ -42,7 +42,7 @@ infrastructure configuration is included.
 
 ## Build
 
-Install Go **1.25 or later**, Node.js **24** and Yarn **1.22.22**.
+Install Go **1.25.7 or later**, Node.js **24** and Yarn **1.22.22**.
 A shell and network access to dependency registries are required.
 
 ```sh

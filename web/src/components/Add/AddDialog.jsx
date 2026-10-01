@@ -15,7 +15,13 @@ import { ButtonWrapper } from 'style/DialogStyles'
 import { StyledDialog, StyledHeader } from 'style/CustomMaterialUiStyles'
 import useOnStandaloneAppOutsideClick from 'utils/useOnStandaloneAppOutsideClick'
 
-import { checkImageURL, getMoviePosters, checkTorrentSource, parseTorrentTitle } from './helpers'
+import {
+  checkImageURL,
+  getMoviePosters,
+  checkTorrentSource,
+  parseTorrentTitle,
+  shortenTitleForPosterSearch,
+} from './helpers'
 import { Content } from './style'
 import RightSideComponent from './RightSideComponent'
 import LeftSideComponent from './LeftSideComponent'
@@ -55,7 +61,10 @@ export default function AddDialog({
   }, [handleClose, isSaving])
   const ref = useOnStandaloneAppOutsideClick(requestClose)
 
-  const { data: torrents } = useQuery('torrents', getTorrents, { retry: 1, refetchInterval: 1000 })
+  const { data: torrents } = useQuery('torrents', getTorrents, {
+    retry: 1,
+    refetchInterval: 1000,
+  })
 
   useEffect(() => {
     // getting hash from added torrent source
@@ -124,7 +133,7 @@ export default function AddDialog({
           return
         }
 
-        getMoviePosters(movieName, language).then(urlList => {
+        getMoviePosters(shortenTitleForPosterSearch(movieName) || movieName, language).then(urlList => {
           if (urlList) {
             setPosterList(urlList)
             if (!shouldRefreshMainPoster && isUserInteractedWithPoster) return

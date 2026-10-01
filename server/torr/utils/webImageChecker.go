@@ -37,9 +37,17 @@ func LooksLikeImgUrl(link string) bool {
 	return false
 }
 
-func CheckImgUrl(link string) bool {
+// CheckImgUrl reports whether link may be stored.
+// verified is true only when a real image body was decoded; a timeout or
+// transport error is ok but not verified, so a caller with an existing poster
+// should keep it.
+func CheckImgUrl(link string) (ok, verified bool) {
 	if link == "" {
-		return false
+		return false, false
+	}
+	u, err := url.Parse(link)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return false, false
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -48,17 +56,15 @@ func CheckImgUrl(link string) bool {
 	req, err := http.NewRequestWithContext(ctx, "GET", link, nil)
 	if err != nil {
 		log.TLogln("Error create request for image:", err)
-		return false
+		return false, false
 	}
+	// Some image hosts (fastpic.org) answer 404 to the default "Go-http-client" agent
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.TLogln("Error check image:", err)
-		return false
+		return true, false
 	}
 	defer resp.Body.Close()
 
@@ -71,7 +77,10 @@ func CheckImgUrl(link string) bool {
 	}
 	if err != nil {
 		log.TLogln("Error decode image:", err)
-		return false
+		if ctx.Err() != nil {
+			return true, false
+		}
+		return false, false
 	}
-	return true
+	return true, true
 }

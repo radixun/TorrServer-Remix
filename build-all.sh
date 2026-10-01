@@ -10,7 +10,7 @@ export GENERATE_SOURCEMAP=false
 go run gen_web.go
 mkdir -p dist
 platforms="${PLATFORMS:-linux/amd64}"
-version="${FORK_VERSION:-MatriX.141-mod}"
+version="${FORK_VERSION:-MatriX.145.1-mod}"
 for platform in $platforms; do
   target_os="${platform%/*}"
   target_arch="${platform#*/}"
