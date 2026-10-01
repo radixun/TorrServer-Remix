@@ -23,6 +23,8 @@ export const offlineHost = () => `${torrserverHost}/offline`
 export const offlineStatusHost = hash => `${torrserverHost}/offline/${hash}`
 export const offlineStreamHost = (hash, id, path = '') =>
   `${torrserverHost}/offline/stream/${hash}/${id}/${encodeURIComponent(path.split('\\').pop().split('/').pop())}`
+export const gstSettingsHost = () => `${torrserverHost}/gst/settings`
+export const wafHost = () => `${torrserverHost}/waf`
 
 export const getTorrServerHost = () => torrserverHost
 export const setTorrServerHost = host => {

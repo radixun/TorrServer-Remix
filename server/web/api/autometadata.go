@@ -715,5 +715,9 @@ func sortedIntKeys(values map[int]struct{}) []int {
 }
 
 func validPosterURL(value string) bool {
-	return value != "" && (utils.LooksLikeImgUrl(value) || utils.CheckImgUrl(value))
+	if utils.LooksLikeImgUrl(value) {
+		return true
+	}
+	ok, _ := utils.CheckImgUrl(value)
+	return ok
 }

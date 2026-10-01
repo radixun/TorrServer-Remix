@@ -65,3 +65,7 @@ local.properties
 *.aab
 *.jks
 *.keystore
+# Include bundled GStreamer runtimes
+!/server/gstreamer/gst-libs/
+!/server/gstreamer/gst-libs/**/
+!/server/gstreamer/gst-libs/**

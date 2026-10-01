@@ -77,6 +77,35 @@ func TestBuildTorznabAPIURL(t *testing.T) {
 	}
 }
 
+func TestSearchOneCategoryModes(t *testing.T) {
+	for _, tc := range []struct {
+		mode       settings.CategoryType
+		categories string
+		want       string
+	}{
+		{"", "", "5000,2000"},
+		{settings.CategoryAll, "2000", ""},
+		{settings.CategoryManual, "2040,5040", "2040,5040"},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			useTorznabTestTransport(t, func(r *http.Request) (*http.Response, error) {
+				if got := r.URL.Query().Get("cat"); got != tc.want {
+					t.Errorf("cat = %q, want %q", got, tc.want)
+				}
+				if r.Context() == nil || r.URL.Query().Get("q") != "Matrix" {
+					t.Error("lost fork request context or search query")
+				}
+				return xmlResponse(http.StatusOK, `<rss><channel/></rss>`), nil
+			})
+			_, err := searchOne(context.Background(), "https://jackett.test", "secret", "Matrix",
+				settings.TorznabConfig{CatType: tc.mode, Categories: tc.categories})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestSearchOneBuildsRequestWithoutDoubleAPI(t *testing.T) {
 	useTorznabTestTransport(t, func(r *http.Request) (*http.Response, error) {
 		if r.URL.Host != "jackett.test" {

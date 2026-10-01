@@ -11,7 +11,7 @@ FROM golang:1.25-bookworm AS server
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG TARGETVARIANT
-ARG FORK_VERSION=MatriX.141-mod
+ARG FORK_VERSION=MatriX.145.1-mod
 WORKDIR /src
 COPY gen_web.go ./
 COPY server/ ./server/

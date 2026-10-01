@@ -103,14 +103,24 @@ func (t *Torrent) Stream(fileID int, req *http.Request, resp http.ResponseWriter
 		}
 	}
 
-	// Mark as viewed
+	// Mark as viewed without resetting existing TimeCode
+	var timecode float64
+	for _, v := range sets.ListViewed(t.Hash().HexString()) {
+		if v.FileIndex == fileID {
+			timecode = v.TimeCode
+			break
+		}
+	}
 	sets.SetViewed(&sets.Viewed{
 		Hash:      t.Hash().HexString(),
 		FileIndex: fileID,
+		TimeCode:  timecode,
 	})
 
 	// Set response headers
 	resp.Header().Set("Connection", "close")
+	// Set response header for Kodi
+	resp.Header().Set("Server", "TorrServer (Portable SDK for UPnP devices)")
 	// Add timeout header if configured
 	if streamTimeout > 0 {
 		resp.Header().Set("X-Stream-Timeout", fmt.Sprintf("%d", streamTimeout))

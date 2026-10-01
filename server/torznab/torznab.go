@@ -39,6 +39,8 @@ type TorznabItem struct {
 	Description string             `xml:"description"`
 	PubDate     string             `xml:"pubDate"`
 	Size        int64              `xml:"size"`
+	Indexer     string             `xml:"jackettindexer"`
+	Prowlarr    string             `xml:"prowlarrindexer"`
 	Enclosure   []TorznabEnclosure `xml:"enclosure"`
 	Attributes  []TorznabAttribute `xml:"attr"`
 }
@@ -242,7 +244,7 @@ func searchConfig(ctx context.Context, config settings.TorznabConfig, plan searc
 			break
 		}
 		attempts++
-		searchResults, err := searchOne(ctx, config.Host, config.Key, candidate.Query)
+		searchResults, err := searchOne(ctx, config.Host, config.Key, candidate.Query, config)
 		if err != nil {
 			failures = append(failures, err)
 			continue
@@ -256,7 +258,7 @@ func searchConfig(ctx context.Context, config settings.TorznabConfig, plan searc
 	return rankAndDedupeResults(results, plan), attempts, successes, failures
 }
 
-func searchOne(ctx context.Context, host, key, query string) ([]*models.TorrentDetails, error) {
+func searchOne(ctx context.Context, host, key, query string, configs ...settings.TorznabConfig) ([]*models.TorrentDetails, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, nil
@@ -271,6 +273,18 @@ func searchOne(ctx context.Context, host, key, query string) ([]*models.TorrentD
 	q.Set("apikey", key)
 	q.Set("t", "search")
 	q.Set("q", query)
+	if len(configs) > 0 {
+		config := configs[0]
+		switch config.CatType {
+		case settings.CategoryAll:
+		case settings.CategoryManual:
+			if config.Categories != "" {
+				q.Set("cat", config.Categories)
+			}
+		default:
+			q.Set("cat", "5000,2000")
+		}
+	}
 	u.RawQuery = q.Encode()
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -300,10 +314,14 @@ func searchOne(ctx context.Context, host, key, query string) ([]*models.TorrentD
 
 	var results []*models.TorrentDetails
 	for _, item := range torznabResp.Channel.Items {
+		if item.Indexer == "" {
+			item.Indexer = item.Prowlarr
+		}
 		detail := &models.TorrentDetails{
 			Title:      item.Title,
 			Name:       item.Title, // Use Title as Name for now
 			Link:       item.Link,
+			Tracker:    item.Indexer,
 			CreateDate: parseDate(item.PubDate),
 		}
 

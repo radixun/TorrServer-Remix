@@ -327,6 +327,11 @@ export const StyledButton = styled.button`
       transform: translateY(-1px);
     }
 
+    :disabled {
+      cursor: wait;
+      opacity: 0.75;
+    }
+
     > :first-child {
       margin-right: 8px;
     }

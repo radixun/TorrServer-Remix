@@ -19,6 +19,8 @@ func SetupRoute(route gin.IRouter) {
 	authorized.GET("/shutdown/*reason", shutdown)
 
 	authorized.POST("/settings", settings)
+	authorized.GET("/waf", getWAF)
+	authorized.POST("/waf", updateWAF)
 	authorized.POST("/torznab/test", torznabTest)
 
 	authorized.POST("/torrents", torrents)
@@ -66,17 +68,20 @@ func SetupRoute(route gin.IRouter) {
 		authorized.GET("/torznab/search", torznabSearch)
 		authorized.GET("/torznab/search/*query", torznabSearch)
 	}
-
-	// Add storage settings endpoints
+	// Storage settings endpoints
 	authorized.GET("/storage/settings", GetStorageSettings)
 	authorized.POST("/storage/settings", UpdateStorageSettings)
-
-	// Add TMDB settings endpoint
+	// TMDB settings endpoint
 	authorized.GET("/tmdb/settings", tmdbSettings)
 	authorized.POST("/posters/search", postersSearch)
 	authorized.GET("/discover/search", discoverSearch)
 	authorized.GET("/discover/genres", discoverGenres)
 	authorized.GET("/discover/details", discoverDetails)
 
+	// GStreamer
+	authorized.GET("/gst/settings", GetGStreamerSettings)
+	authorized.POST("/gst/settings", UpdateGStreamerSettings)
+	// FFProbe
+	authorized.GET("/ffp/status", ffprobeStatus)
 	authorized.GET("/ffp/:hash/:id", ffp)
 }
