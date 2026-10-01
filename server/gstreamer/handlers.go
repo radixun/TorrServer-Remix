@@ -14,10 +14,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"server/web/auth"
 )
 
 func (s *Service) SetupRoute(route gin.IRouter) {
-	route.GET("/gst/remove", s.remove)
+	route.GET("/gst/remove", auth.CheckAuth(), s.remove)
 	route.GET("/gst/echo", s.echo)
 	route.GET("/gst/:hash/heartbeat", s.heartbeat)
 	route.GET("/gst/:hash/probe", s.probe)

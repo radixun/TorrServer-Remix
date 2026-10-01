@@ -121,3 +121,25 @@ func renameToBak(path string) error {
 	}
 	return os.Rename(path, bak)
 }
+
+// LegacyWAFConfig supplies the existing ACL without writing or renaming files.
+// It keeps upgrades protected when migration is disabled or cannot persist.
+func LegacyWAFConfig() (WAFConfig, error) {
+	cfg := normalizeWAFConfig(WAFConfig{})
+	for _, item := range []struct {
+		name   string
+		target *[]string
+	}{
+		{legacyWIPFile, &cfg.Whitelist}, {legacyBIPFile, &cfg.Blacklist},
+	} {
+		buf, err := os.ReadFile(filepath.Join(Path, item.name))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return cfg, err
+		}
+		*item.target = splitNonEmptyLines(string(buf))
+	}
+	return cfg, nil
+}

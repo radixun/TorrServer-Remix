@@ -2,33 +2,28 @@
   lib,
   buildGoModule,
   pkg-config,
-  fetchFromGitHub,
-  fetchYarnDeps,
+  src,
   pkgs,
   ...
 }:
 pkgs.stdenv.mkDerivation rec {
   pname = "torrserver";
-  version = "MatriX.141";
+  version = "MatriX.145.1-mod";
 
-  src = pkgs.fetchgit {
-    url = "https://github.com/YouROK/TorrServer.git";
-    rev = "${version}";
-    hash = "sha256-OeAAYyxfZxcx0ANeRAWJTrZMNWtdrM/pwXyO5QNTwYo=";
-  };
+  inherit src;
   yarnOfflineCache = pkgs.fetchYarnDeps {
     yarnLock = "${src}/web/yarn.lock";
-    hash = "sha256-B2D5HapIbrKLRvfKKF7HhJb6IlWRG2vi/qm4A5gJsNk=";
+    hash = "sha256-nOVycryTbPldoxdU4ypZ2IKe+p0/9su5JO/8dXumD7E=";
   };
 
   goModules = pkgs.buildGoModule.override { go = pkgs.go_1_26; } {
     pname = "torrserver-go-deps";
     version = version;
     src = "${src}/server";
-    vendorHash = "sha256-rjdE9yf6S3ZovEeRO0+5sJsy9PRdFFejFDhkgJLMz58=";
+    vendorHash = "sha256-Ux66KP2vHduRBNUxlYt5Udm90YUzbvc2rA2qDPMsB/4=";
     modBuildPhase = ''
       go mod download
-      go mod vendor
+      go mod vendor -e
     '';
 
     installPhase = ''
@@ -48,7 +43,6 @@ pkgs.stdenv.mkDerivation rec {
     yarn
     fixup-yarn-lock
     nodejs
-    go-swag
   ];
 
   buildInputs = with pkgs; [
@@ -58,7 +52,7 @@ pkgs.stdenv.mkDerivation rec {
   buildPhase = ''
     export GOCACHE=$TMPDIR/go-build
     export GOMODCACHE=$TMPDIR/go-mod
-    export HOME=$(mktemp -d)
+    export YARN_CACHE_FOLDER=$TMPDIR/yarn-cache
     export NODE_OPTIONS=--openssl-legacy-provider
     export PATH=$PATH:$(go env GOPATH)/bin
 
@@ -71,9 +65,7 @@ pkgs.stdenv.mkDerivation rec {
     yarn build
     cd ..
 
-    cd server
-    swag init -g web/server.go --parseInternal --parseDepth 5
-    cd ..
+    go run gen_web.go
 
     mkdir -p server/vendor
     cp -r ${goModules}/vendor/* server/vendor/
@@ -81,8 +73,8 @@ pkgs.stdenv.mkDerivation rec {
 
     cd server
     mkdir -p ../dist
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-      -ldflags="-s -w -checklinkname=0" \
+    CGO_ENABLED=0 go build \
+      -ldflags="-s -w -checklinkname=0 -X server/version.Version=${version}" \
       -tags=nosqlite \
       -trimpath \
       -o ../dist/torrserver ./cmd
@@ -97,7 +89,7 @@ pkgs.stdenv.mkDerivation rec {
 
   meta = with pkgs.lib; {
     description = "Simple and powerful tool for streaming torrents";
-    homepage = "https://github.com/YouROK/TorrServer";
+    homepage = "https://github.com/radixun/TorrServer-Remix";
     license = licenses.gpl3Only;
     mainProgram = "torrserver";
     platforms = [

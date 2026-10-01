@@ -28,7 +28,7 @@
 
       packages = eachSystem (pkgs: {
         default = self.packages.${pkgs.stdenv.system}.torrserver;
-        torrserver = pkgs.callPackage ./nix/packages/torrserver.nix { };
+        torrserver = pkgs.callPackage ./nix/packages/torrserver.nix { src = self; };
       });
 
       homeModules = {

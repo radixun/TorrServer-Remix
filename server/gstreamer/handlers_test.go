@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"server/settings"
+	"server/web/auth"
 )
 
 type masterInitRunner struct {
@@ -297,5 +299,29 @@ func TestParseSegmentIndexAllowsNonNegative(t *testing.T) {
 		if got != want {
 			t.Fatalf("parseSegmentIndex(%q) = %d, want %d", value, got, want)
 		}
+	}
+}
+
+func TestRemoveRequiresAuthentication(t *testing.T) {
+	old := settings.HttpAuth
+	settings.HttpAuth = true
+	defer func() { settings.HttpAuth = old }()
+	service := NewService(DefaultConfig())
+	defer service.Dispose()
+	router := gin.New()
+	router.Use(auth.BasicAuth(gin.Accounts{"test": "test-password"}))
+	service.SetupRoute(router)
+	req := httptest.NewRequest("GET", "/gst/remove?hash="+strings.Repeat("a", 40), nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated remove = %d", rec.Code)
+	}
+	req = httptest.NewRequest("GET", "/gst/remove?hash="+strings.Repeat("a", 40), nil)
+	req.SetBasicAuth("test", "test-password")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("authenticated missing task = %d", rec.Code)
 	}
 }

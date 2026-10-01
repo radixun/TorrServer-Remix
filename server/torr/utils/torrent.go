@@ -42,6 +42,8 @@ var (
 	prefetchMu         sync.Mutex
 	prefetchStartedGen uint64 = ^uint64(0)
 	refreshLoopOnce    sync.Once
+	refreshStop        chan struct{}
+	refreshDone        chan struct{}
 )
 
 func SetDefTrackers(trackers []string) {
@@ -92,7 +94,9 @@ func GetDefTrackers() []string {
 func PrefetchTrackers() {
 	startPrefetch()
 	refreshLoopOnce.Do(func() {
-		go trackersRefreshLoop()
+		refreshStop = make(chan struct{})
+		refreshDone = make(chan struct{})
+		go trackersRefreshLoop(trackersRefreshInterval, refreshStop, refreshDone)
 	})
 }
 
@@ -250,9 +254,16 @@ func fetchTrackersFromURL(url string, local []string) ([]string, error) {
 	return append(remote, local...), nil
 }
 
-func trackersRefreshLoop() {
+func trackersRefreshLoop(interval time.Duration, stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	for {
-		time.Sleep(trackersRefreshInterval)
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+		}
 		urls := configuredTrackersListURLs()
 		if len(urls) == 0 {
 			continue

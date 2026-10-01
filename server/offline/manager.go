@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -947,11 +946,11 @@ func (m *Manager) storageInfo() (int64, error) {
 	if err != nil || info.IsDir() {
 		return 0, ErrStorageUnavailable
 	}
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(m.root, &stat); err != nil {
+	free, err := diskFreeBytes(m.root)
+	if err != nil {
 		return 0, ErrStorageUnavailable
 	}
-	return int64(stat.Bavail) * int64(stat.Bsize), nil
+	return free, nil
 }
 
 func (m *Manager) loadJobs() {

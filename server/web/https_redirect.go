@@ -3,7 +3,6 @@ package web
 import (
 	"net"
 	"net/http"
-	"net/url"
 
 	"server/log"
 	"server/settings"
@@ -34,15 +33,11 @@ func buildHTTPSRedirectTarget(r *http.Request) string {
 	} else {
 		httpsHost = net.JoinHostPort(hostName, sslPort)
 	}
-	path := r.URL.EscapedPath()
-	if path == "" {
-		path = "/"
-	}
-	u := &url.URL{
-		Scheme:   "https",
-		Host:     httpsHost,
-		Path:     path,
-		RawQuery: r.URL.RawQuery,
+	u := *r.URL
+	u.Scheme = "https"
+	u.Host = httpsHost
+	if u.Path == "" {
+		u.Path = "/"
 	}
 	return u.String()
 }

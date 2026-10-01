@@ -56,8 +56,9 @@ Merge decisions:
 - Retain upstream removal of the obsolete P2P proxy settings. Browser resume
   positions remain separate from server watched marks/timecodes.
 
-Validation: fresh `build-all.sh` Linux/amd64 build; server tests with
-`CGO_ENABLED=0 go test -tags=nosqlite -timeout=120s ./...`; React tests; explicit
-legacy watched-history migration and Torznab category compatibility tests.
-Playback on a maintainer-approved test host, TV, Docker and other-platform
-runtime acceptance remain unverified. No deployment is part of this merge.
+Follow-up validation reproduced and fixed legacy read-only WAF migration,
+GStreamer remove authentication, watched-directory startup/import reopening,
+playlist file ordering, escaped HTTPS redirects, Windows offline compilation,
+tracker test cleanup and Nix fork-source packaging. See
+[PR2_TEST_REPORT.md](PR2_TEST_REPORT.md) for commands, runtime coverage and
+remaining external-service/device acceptance limits.

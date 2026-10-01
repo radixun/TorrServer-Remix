@@ -105,7 +105,7 @@ func statusFromSpec(tr *torr.Torrent) *state.TorrentStatus {
 
 	files := info.UpvertedFiles()
 	sort.Slice(files, func(i, j int) bool {
-		return strings.Join(files[i].Path, "/") < strings.Join(files[j].Path, "/")
+		return utils.CompareStrings(strings.Join(files[i].Path, "/"), strings.Join(files[j].Path, "/"))
 	})
 
 	for i, f := range files {

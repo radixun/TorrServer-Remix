@@ -105,11 +105,19 @@ func (s *store) update(u ListsUpdate) (Snapshot, error) {
 }
 
 func loadLists() Snapshot {
-	cfg, _, err := settings.GetWAFConfig()
+	cfg, found, err := settings.GetWAFConfig()
 	var storageWarnings []Warning
 	if err != nil {
 		log.TLogln("WAF: load config:", err)
 		storageWarnings = append(storageWarnings, Warning{List: "storage", Code: "read_failed"})
+	}
+	if err != nil || !found {
+		legacy, legacyErr := settings.LegacyWAFConfig()
+		if legacyErr != nil {
+			log.TLogln("WAF: legacy config:", legacyErr)
+			storageWarnings = append(storageWarnings, Warning{List: "storage", Code: "legacy_read_failed"})
+		}
+		cfg = legacy
 	}
 	whiteBuf := []byte(listToText(cfg.Whitelist))
 	blackBuf := []byte(listToText(cfg.Blacklist))

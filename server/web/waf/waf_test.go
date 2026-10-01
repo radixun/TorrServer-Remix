@@ -393,3 +393,26 @@ func TestConcurrentUpdatesNeverMixConfigurations(t *testing.T) {
 		}
 	})
 }
+
+func TestLegacyACLReadOnlyUpgrade(t *testing.T) {
+	withTestWAFDB(t, func(dir string) {
+		if err := os.WriteFile(filepath.Join(dir, "bip.txt"), []byte("192.0.2.10\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		settings.ReadOnly = true
+		settings.MigrateWAFLists()
+		router := gin.New()
+		router.Use(WAF())
+		router.GET("/echo", func(c *gin.Context) { c.Status(200) })
+		req := httptest.NewRequest("GET", "/echo", nil)
+		req.RemoteAddr = "192.0.2.10:1234"
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != 403 {
+			t.Fatalf("legacy blocked client got %d, want 403", rec.Code)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "bip.txt")); err != nil {
+			t.Fatal("legacy ACL modified")
+		}
+	})
+}

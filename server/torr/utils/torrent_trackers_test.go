@@ -28,6 +28,11 @@ func setupTrackersTestWithURLs(t *testing.T, custom string, mirrors []string, de
 }
 
 func resetTrackersTestState() {
+	if refreshStop != nil {
+		close(refreshStop)
+		<-refreshDone
+		refreshStop, refreshDone = nil, nil
+	}
 	settings.BTsets = nil
 	trackersMu.Lock()
 	loadedTrackers = nil
